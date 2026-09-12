@@ -1,6 +1,6 @@
-// Blueprint OS — AI Proxy (Vercel serverless function)
-// بيقف بين الأداة و Qwen. المفتاح متخبّي هنا في Environment Variable (مش في الكود).
-// المسار: POST /api/ai   body: { messages, model?, max_tokens?, enable_search? }
+// Blueprint OS — AI Proxy (Vercel serverless) — نسخة OpenAI
+// بيقف بين الأداة و OpenAI. المفتاح متخبّي هنا في Environment Variable (مش في الكود).
+// المسار: POST /api/ai   body: { model, messages, max_tokens?, ... }
 
 export default async function handler(req, res) {
   // CORS — نسمح للأداة تكلّم السيرفر ده
@@ -11,20 +11,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
 
-  const API_KEY = process.env.QWEN_API_KEY;
-  const ENDPOINT = process.env.QWEN_ENDPOINT ||
-    'https://ws-o9s20r2sxw2n4cgk.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
+  const API_KEY = process.env.OPENAI_API_KEY;
+  const ENDPOINT = process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1';
 
-  if (!API_KEY) { res.status(500).json({ error: 'QWEN_API_KEY مش متظبط في إعدادات Vercel' }); return; }
+  if (!API_KEY) { res.status(500).json({ error: 'OPENAI_API_KEY مش متظبط في إعدادات Vercel' }); return; }
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+
+    // بنمرّر اللي الأداة بعتته زي ما هو (model, messages, max_tokens, ...)
+    // enable_search بتاع Qwen مش موجود في OpenAI فبنشيله لو جه.
     const payload = {
-      model: body.model || 'qwen-plus',
+      model: body.model || 'gpt-4o-mini',
       max_tokens: body.max_tokens || 1200,
       messages: body.messages || [],
     };
-    if (body.enable_search) payload.enable_search = true;
+    if (typeof body.temperature === 'number') payload.temperature = body.temperature;
+    if (body.response_format) payload.response_format = body.response_format;
 
     const r = await fetch(ENDPOINT.replace(/\/+$/, '') + '/chat/completions', {
       method: 'POST',
