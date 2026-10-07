@@ -85,6 +85,8 @@ export default async function handler(req, res) {
       const r = await runSearch(key, model, body.input, maxTokens, toolType, controller.signal);
       if (!r.ok) { attempts.push({ tool: toolType, upstreamStatus: r.status, message: r.message }); continue; }
       attempts.push(r.diag);
+      // A completed search without sources is an answer; repeating it with the preview tool doubles the cost.
+      if (!r.sources.length) break;
       if (r.sources.length) {
         return res.status(200).json({
           output: [
