@@ -6581,6 +6581,7 @@ function tt333Accept(raw,url,r){
 // ---- Steps 1+2 per URL, with reuse of recent successful reads ----
 const read333=bp323Read;
 bp323Read=async function(url,signal){
+ if(tt333Junk(url))return {url,text:'',status:'unavailable',note:'رابط صورة أو ملف — مش صفحة',at:Date.now()};
  const c=tt333JobClient(signal),key=canonicalURL(url),run=c&&TT333.runs.get(c.id),own=!!run&&(run.own.has(key)||tt333Seeds(c).some(u=>canonicalURL(u)===key));
  if(c&&!TT333.force.has(c.id)){const old=bp323State(c).sources.find(x=>canonicalURL(x.url)===key&&['read','identity_unverified'].includes(x.status)&&x.text&&Date.now()-(x.at||0)<TT333.TTL);if(old){const doc={...old,status:'read',fromCache333:true};delete doc.note;return doc;}}
  let doc;try{doc=await read333(url,signal);}catch(e){if(signal?.aborted||e?.name==='AbortError')throw e;doc={url,text:'',status:'unavailable',note:String(e.message||e),at:Date.now()};}
@@ -6622,6 +6623,7 @@ bp323Collect=async function(c,signal,status){
   if(tt333Seeds(c).length){try{await collect333(c,signal,status);}catch(e){if(signal.aborted||e?.name==='AbortError')throw e;tt333Issue(c,'خطوة من جمع المصادر وقفت: '+String(e.message||e).slice(0,160)+' — كمّلنا باللي اتقرأ.');}}
   if(signal.aborted)return;
   await tt333LinkedSites(c,signal,status);if(signal.aborted)return;
+  await tt333OfficialAccounts(c,signal,status);if(signal.aborted)return;
   await tt333Alternates(c,signal,status);
  }finally{TT333.runs.delete(c.id);TT333.soft.delete(signal);TT333.force.delete(c.id);tt333DedupeSources(c);for(const x of s.sources)if(x.status==='identity_unverified'&&!String(x.text||'').trim()){x.status='unavailable';x.note=toArr(x.attempts333).filter(a=>!a.ok&&a.note).map(a=>a.note).at(-1)||'اتعذرت القراءة';}const ok=new Set(toArr(s.identityConfirmed333));for(const x of s.sources)if(ok.has(canonicalURL(x.url))&&x.text){x.identityReviewed=true;x.status='read';x.identityAuto333='أكده الفريق';delete x.note;}s.collectedAt333=Date.now();persist();}};
 // The official page often names the website as a bare domain ("ivfegypt.org") or behind
@@ -6713,6 +6715,41 @@ function tt333Decisions(c){
 const run333=window.bp324RunStudy;
 window.bp324RunStudy=async function(cid,reuse=false){{const c=getClient(cid),cache=c&&bp323State(c).claimCache329;if(cache?.claims&&!cache.tt333){cache.claims=tt333Reclassify(cache.claims,c);cache.tt333=true;}}const r=await run333(cid,reuse);const c=getClient(cid);if(!c)return r;const s=bp323State(c);if(s.report){const blocked=tt333Decisions(c).filter(x=>!x.ok),bnote=blocked.length?'قرارات موقوفة لحد ما البيانات تكمل: '+blocked.map(x=>x.label+' (ناقص: '+x.missing.join('، ')+')').join(' · '):'';s.report.limits=[...toArr(s.report.limits).filter(x=>!/^قرارات موقوفة لحد ما البيانات تكمل/.test(x)),...(bnote?[bnote]:[])];persist();const docs=bp324Docs(c).filter(d=>!['meta_report','tracking_html'].includes(d.kind)),note='دراسة مبدئية: مفيش مصدر مقروء عن العميل؛ الأحكام مبنية على رسالة السيلز والإجابات بس.',lim=toArr(s.report.limits);if(!docs.length&&!lim.includes(note)){s.report.limits=[note,...lim];s.report.phase='preliminary';persist();render();}}return r;};
 
+// ---- Credit: only paid calls that can change the result ----
+// Hosts that serve images/files, never a page about the client.
+const TT333_JUNK=/(?:^|\.)(?:fbcdn\.net|cdninstagram\.com|ytimg\.com|googleusercontent\.com|gstatic\.com|tiktokcdn\.com|twimg\.com|licdn\.com)$/i;
+function tt333Junk(u){try{const x=new URL(u);return TT333_JUNK.test(x.hostname)||/\.(?:png|jpe?g|webp|gif|svg|mp4|webm|pdf|css|js)$/i.test(x.pathname);}catch{return false;}}
+// Same text twice in a page (menus, footers) only costs tokens.
+function tt333Compact(text,max=12000){const seen=new Set(),out=[];for(const raw of String(text||'').split('\n')){const l=raw.replace(/\s+/g,' ').trim();if(l.length<3)continue;const k=l.toLowerCase();if(seen.has(k))continue;seen.add(k);out.push(l);}return out.join('\n').slice(0,max);}
+// 1) Extraction: one AI call per page, so skip pages that cannot add facts and shorten long ones.
+const extract333=bp324Extract;
+bp324Extract=function(c,docs,signal,status){const seen=new Set(),keep=[];const socialDocs=docs.filter(d=>d.kind!=='social'&&bp324Social(d.url));for(const d of toArr(docs)){if(['tracking_html','meta_report','ad_library','competitor'].includes(d.kind))continue;if(tt333Junk(d.url))continue;if(d.kind==='social'&&String(d.url).startsWith('provided:')&&socialDocs.length)continue;const text=tt333Compact(d.text);if(text.length<150)continue;const key=bp329Hash(text.slice(0,2000));if(seen.has(key))continue;seen.add(key);keep.push({...d,text});}const skipped=toArr(docs).length-keep.length;if(skipped&&c)tt333Issue(c,'اتخطّى '+skipped+' مصدر في الاستخراج (كود تتبع، صور، تكرار، أو نص قليل) لتوفير الرصيد.');return extract333(c,keep,signal,status);};
+// 2) Ad-library searches for the client (Google/YouTube/TikTok) cost three web searches per study and
+//    rarely return records; they now run only when asked from the source panel.
+const libs333=bp323LibraryResearch;
+bp323LibraryResearch=async function(c,comp,platform,signal,status){if(comp?.id==='client'&&!bp323State(c).deepLibraries333){const e=comp;e.libraryStatus=e.libraryStatus||{};e.libraryStatus[platform]={at:Date.now(),status:'skipped',note:'مش متفحوص تلقائيًا لتوفير الرصيد — شغّله من «حالة المصادر» لو محتاجه'};return;}return libs333(c,comp,platform,signal,status);};
+window.tt333DeepLibraries=function(cid){const c=getClient(cid);bp323State(c).deepLibraries333=true;changed(c,'تفعيل فحص مكتبات Google/YouTube/TikTok');toast('هيتفحص في الدراسة الجاية (3 عمليات بحث).');render();};
+// 3) Official accounts: when the client's own page already lists its links, no web search is needed.
+function tt333OfficialLinks(c){const s=bp323State(c),out=new Set();for(const d of s.sources){if(d.status!=='read'||!bp324Social(d.url)||(d.discoveryEvidenceURL&&!d.identityReviewed))continue;const t=(d.rawText||'')+'\n'+(d.text||'');for(const m of t.matchAll(/l\.facebook\.com\/l\.php\?u=([^&\s)"']+)/gi)){try{out.add(decodeURIComponent(m[1]));}catch{}}for(const m of t.matchAll(/https?:\/\/(?:www\.)?(?:instagram\.com|tiktok\.com|youtube\.com|youtu\.be|linkedin\.com|x\.com|twitter\.com)\/[^\s)"'<>]+/gi))out.add(m[0]);}return [...out].map(u=>{try{const x=new URL(u);x.search='';x.hash='';return x.href;}catch{return '';}}).filter(u=>u&&bp324Social(u)&&!/\/(?:sharer|share|intent|login)\b/i.test(u));}
+const webCredit333=webResearch;
+webResearch=async function(prompt,signal){const c=tt333JobClient(signal);if(c&&/الحسابات الرقمية الرسمية لهذا النشاط فقط/.test(String(prompt))){const links=tt333OfficialLinks(c);if(links.length>=2){const d=auditState(c);d.socialLinks=[...new Set([...String(d.socialLinks||'').split(/\n/).filter(Boolean),...links])].join('\n');bp323State(c).officialLinks333=links;tt333Issue(c,'الحسابات الرسمية اتاخدت من صفحة العميل نفسها ('+links.length+')؛ مفيش بحث ويب.');return {data:{links:[],notes:[]},sources:[]};}}return webCredit333(prompt,signal);};
+// 4) Search model: the mini model is enough to find links and costs far less per search.
+const searchCfg333=searchConfig;
+searchConfig=function(){const s=searchCfg333();return /\/api\/search$/.test(s.endpoint||'')&&(!s.model||s.model==='gpt-4.1')?{...s,model:'gpt-4.1-mini'}:s;};
+
+// ---- Missing pieces ----
+// Findings filed under "tracking" that are not about tracking (e.g. "has a contact email") go to the funnel.
+const validate333=bp324Validate;
+bp324Validate=function(raw,docs,claims){const r=validate333(raw,docs,claims);for(const f of toArr(r?.findings))if(f.section==='tracking'&&!/pixel|بيكسل|capi|conversion api|ga4|gtag|google tag|gtm|tag manager|تتبع|tracking|events?\b|أحداث|إحداث|analytics|تحليلات|قياس|utm/i.test(String(f.observation||'')+' '+String(f.action||'')))f.section='funnel';return r;};
+// Relative post times ("6 days ago", "منذ 3 أيام", "5d") get an approximate date so posts can be dated.
+function tt333Dates(text,at=Date.now()){const day=864e5,unit=u=>/^(?:m|min|minute|دقيقة|دقائق|دقايق)/i.test(u)?6e4:/^(?:h|hr|hour|ساعة|ساعات)/i.test(u)?36e5:/^(?:d|day|يوم|أيام|ايام)/i.test(u)?day:/^(?:w|week|أسبوع|اسبوع|أسابيع|اسابيع)/i.test(u)?7*day:/^(?:mo|month|شهر|أشهر|اشهر|شهور)/i.test(u)?30*day:/^(?:y|year|سنة|سنين|سنوات)/i.test(u)?365*day:0;const mark=(m,n,u)=>{const ms=unit(u);return ms?m+' [≈'+new Date(at-Number(n)*ms).toISOString().slice(0,10)+']':m;};return String(text||'').replace(/\b(\d{1,3})\s*(minutes?|hours?|days?|weeks?|months?|years?)\s+ago\b/gi,mark).replace(/منذ\s+(\d{1,3})\s*(دقيقة|دقائق|ساعة|ساعات|يوم|أيام|ايام|أسبوع|اسبوع|أسابيع|شهر|أشهر|شهور|سنة|سنوات)/g,mark).replace(/(?<![\w/.-])(\d{1,3})(mo|[mhdwy])(?![\w/.-])/g,(m,n,u)=>mark(m,n,u==='m'?'min':u));}
+const extractDates333=bp324Extract;
+bp324Extract=function(c,docs,signal,status){return extractDates333(c,toArr(docs).map(d=>bp324Social(d.url)||/youtube|tiktok|instagram/i.test(String(d.url))?{...d,text:tt333Dates(d.text)}:d),signal,status);};
+// Official accounts linked from the client's page (YouTube channel, Instagram, TikTok) are read too,
+// so the content sample is not limited to one Facebook post.
+async function tt333OfficialAccounts(c,signal,status){const s=bp323State(c),have=u=>s.sources.some(x=>canonicalURL(x.url)===canonicalURL(u));const links=tt333OfficialLinks(c).filter(u=>!have(u)&&!/facebook\.com/i.test(u)).map(u=>/youtube\.com\/@[^/]+\/?$/i.test(u)?u.replace(/\/?$/,'/videos'):u).sort((a,b)=>Number(/youtube/.test(b))-Number(/youtube/.test(a))).slice(0,3);
+ for(const u of links){if(signal.aborted)return;status('قراءة حساب رسمي مذكور في صفحة العميل: '+tt333Host(u));TT333.runs.get(c.id)?.own.add(canonicalURL(u));const doc=await bp323Read(u,signal);if(signal.aborted)return;Object.assign(doc,{linkedFrom333:'official-page',identityReviewed:true,identityAuto333:'الحساب مذكور في صفحة العميل الرسمية',platform:bp324Platform(u,c)});s.sources.push(doc);persist();}}
+
 // ---- Actions ----
 window.tt333Retry=async function(cid,i){const c=getClient(cid),s=c&&bp323State(c),x=s?.sources[i];if(!x)return;const url=x.url;await withJob(cid,'src333',async(signal,status)=>{status('إعادة قراءة '+tt333Host(url)+'…');TT333.browser.delete(canonicalURL(url));TT333.down=null;TT333.force.add(cid);let doc;try{doc=await bp323Read(url,signal);}finally{TT333.force.delete(cid);}if(signal.aborted)return;const cur=s.sources.find(y=>canonicalURL(y.url)===canonicalURL(url));for(const k of ['discoveryEvidenceURL','alternateFor333','identityReviewed','identityAuto333','platform','kind'])if(cur&&cur[k]!==undefined&&doc[k]===undefined)doc[k]=cur[k];if(cur)s.sources[s.sources.indexOf(cur)]=doc;else s.sources.push(doc);changed(c,(doc.status==='read'?'إعادة قراءة نجحت: ':'إعادة قراءة لسه متعذرة: ')+url);toast(doc.status==='read'?'اتقرأ المصدر. اضغط «حدّث التشخيص» علشان يدخل الدراسة.':'لسه متعذر: '+(doc.note||'')+' — تقدر تضيف نص أو صور بداله.');});};
 window.tt333ConfirmIdentity=function(cid,i){const c=getClient(cid),x=c&&bp323State(c).sources[i];if(!x)return;if(!confirm('تأكيد إن المصدر ده يخص نفس العميل؟\n'+x.url))return;const s=bp323State(c);s.identityConfirmed333=[...new Set([...toArr(s.identityConfirmed333),canonicalURL(x.url)])];x.identityReviewed=true;if(x.text)x.status='read';x.identityAuto333='أكده الفريق';delete x.note;changed(c,'تأكيد هوية مصدر: '+x.url);render();};
@@ -6758,7 +6795,7 @@ function tt333Panel(c){
  ${[altNote,browserNote,...toArr(s.collectIssues333)].filter(Boolean).map(t=>`<p class="v-help">• ${E(t)}</p>`).join('')}
  <h3>تأثير الناقص على القرار</h3><ul class="tt333-list">${decisions.map(d=>`<li class="tt333-row ${d.ok?'good':'warn'}"><div><b>${d.ok?'✓ متاح':'⏸ موقوف'}</b> · ${E(d.label)}${d.ok?'':`<small>ناقص: ${E(d.missing.join('، '))}</small>`}</div></li>`).join('')}</ul>
  <p class="v-help">القرار الموقوف بس هو اللي بيستنى بياناته؛ باقي الدراسة بتكمل باللي متاح.</p>
- <div class="v-actions">${btn('أضف نص أو صور أو ملف',`tt333OpenAdd('${c.id}')`,true)}${src.length?`<button class="btn btn-ghost" ${busy?'disabled':''} onclick="tt333RefreshAll('${c.id}')">اقرأ كل المصادر من جديد</button>`:''}</div></section>`;}
+ <div class="v-actions">${btn('أضف نص أو صور أو ملف',`tt333OpenAdd('${c.id}')`,true)}${!s.deepLibraries333&&src.length?btn('افحص مكتبات Google/YouTube/TikTok (3 عمليات بحث)',`tt333DeepLibraries('${c.id}')`,true):''}${src.length?`<button class="btn btn-ghost" ${busy?'disabled':''} onclick="tt333RefreshAll('${c.id}')">اقرأ كل المصادر من جديد</button>`:''}</div></section>`;}
 const controls333=ttControls;
 ttControls=function(c){return controls333(c)+tt333Panel(c);};
 

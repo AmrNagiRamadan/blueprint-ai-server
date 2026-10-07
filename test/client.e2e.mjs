@@ -272,6 +272,20 @@ await check('doctor page: website named in the bio is found and read; agency/pro
   assert.equal(st.agency, 2, 'agency result + proposal shown as agency offers');
 });
 
+await check('credit: no client ad-library searches unless asked; tracking HTML and duplicates are not sent for extraction', async () => {
+  assert.equal(net.search.filter(x => /ابحث عن سجل إعلان فعلي للمعلن/.test(x) && /دكتور العيلة/.test(x)).length, 0, 'no library searches by default');
+  const extracted = net.ai.filter(x => /^استخرج معلومات صريحة/.test(x) && /دكتور|ivfegypt/.test(x));
+  assert.ok(extracted.every(x => !/نوع المصدر tracking_html/.test(x)), 'tracking html not extracted');
+  const urls = extracted.map(x => (x.match(/url="([^"]+)"/) || [])[1]);
+  assert.equal(new Set(urls).size, urls.length, 'each page extracted once');
+  assert.ok(!urls.includes('provided:social'), 'duplicate social text not extracted');
+});
+
+await check('posts: relative times get approximate dates for extraction', async () => {
+  const p = net.ai.find(x => /^استخرج معلومات صريحة/.test(x) && x.includes(DR_FB));
+  assert.match(p, /6 minutes ago \[≈\d{4}-\d{2}-\d{2}\]/);
+});
+
 await check('server token is sent only to the Blueprint server', async () => {
   await page.evaluate(() => localStorage.setItem('bp_server_token', 'tok'));
   const headers = [];
