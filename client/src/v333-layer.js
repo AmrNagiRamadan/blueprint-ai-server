@@ -90,8 +90,48 @@ bp323Collect=async function(c,signal,status){
  try{
   if(tt333Seeds(c).length){try{await collect333(c,signal,status);}catch(e){if(signal.aborted||e?.name==='AbortError')throw e;tt333Issue(c,'خطوة من جمع المصادر وقفت: '+String(e.message||e).slice(0,160)+' — كمّلنا باللي اتقرأ.');}}
   if(signal.aborted)return;
+  await tt333LinkedSites(c,signal,status);if(signal.aborted)return;
   await tt333Alternates(c,signal,status);
  }finally{TT333.runs.delete(c.id);TT333.soft.delete(signal);TT333.force.delete(c.id);tt333DedupeSources(c);for(const x of s.sources)if(x.status==='identity_unverified'&&!String(x.text||'').trim()){x.status='unavailable';x.note=toArr(x.attempts333).filter(a=>!a.ok&&a.note).map(a=>a.note).at(-1)||'اتعذرت القراءة';}const ok=new Set(toArr(s.identityConfirmed333));for(const x of s.sources)if(ok.has(canonicalURL(x.url))&&x.text){x.identityReviewed=true;x.status='read';x.identityAuto333='أكده الفريق';delete x.note;}s.collectedAt333=Date.now();persist();}};
+// The official page often names the website as a bare domain ("ivfegypt.org") or behind
+// l.facebook.com/l.php?u=…; the link extractor only sees full links, so the site was never read.
+const TT333_NOT_SITE=/(?:^|\.)(?:facebook\.com|fb\.com|fb\.me|fb\.watch|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com|linkedin\.com|whatsapp\.com|wa\.me|google\.[a-z.]+|goo\.gl|gmail\.com|hotmail\.com|outlook\.com|yahoo\.com|live\.com|icloud\.com|jina\.ai|apple\.com|play\.google\.com|bit\.ly)$/i;
+function tt333SiteCandidates(text){const out=new Set(),t=String(text||'');for(const m of t.matchAll(/l\.facebook\.com\/l\.php\?u=([^&\s)"']+)/gi)){try{out.add(decodeURIComponent(m[1]));}catch{}}for(const m of t.matchAll(/(?<![@\w.\/:-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|org|net|info|biz|co|io|me|clinic|health|care|online|site|store|eg|sa|ae|kw|qa)(?:\.[a-z]{2})?)(\/[^\s)"'<>،]*)?/gi))out.add('https://'+m[1]+(m[2]||'/'));for(const m of t.matchAll(/\]\((https?:\/\/[^\s)]+)\)/g))out.add(m[1]);return [...out].map(u=>{try{const x=new URL(u);x.hash='';return safeURL(x.href)&&!TT333_NOT_SITE.test(x.hostname.replace(/^www\./,''))&&!bp324Social(x.href)?x.href:'';}catch{return '';}}).filter(Boolean);}
+async function tt333LinkedSites(c,signal,status){
+ const s=bp323State(c),d=auditState(c);
+ const official=s.sources.filter(x=>x.status==='read'&&bp324Social(x.url)&&(!x.discoveryEvidenceURL||x.identityReviewed));
+ const have=u=>s.sources.some(x=>canonicalURL(x.url)===canonicalURL(u));
+ let budget=4;
+ for(const page of official){
+  const sites=tt333SiteCandidates((page.rawText||'')+'\n'+(page.text||'')).filter(u=>!have(u)).slice(0,2);
+  for(const site of sites){
+   if(signal.aborted||budget<=0)return;budget--;status('قراءة الموقع المذكور في صفحة العميل: '+tt333Host(site));
+   const doc=await bp323Read(site,signal);if(signal.aborted)return;
+   Object.assign(doc,{linkedFrom333:page.url,identityReviewed:true,identityAuto333:'الرابط مذكور في صفحة العميل الرسمية',platform:'Website',kind:doc.kind||'website'});
+   s.sources.push(doc);persist();
+   if(doc.status!=='read')continue;
+   if(!String(d.website||'').trim())d.website=site;
+   const html=await bp324HTML(site,signal);if(signal.aborted)return;
+   if(html&&s.trackingProbe?.status!=='html_read')s.trackingProbe={status:'html_read',url:site,at:html.at||Date.now(),markers:bp324Tracking(html.text),limits:'وجود العلامة لا يثبت سلامة الأحداث. غيابها من HTML لا يثبت عدم وجود التتبع.'};
+   const host=new URL(site).hostname,inner=[...new Set(bp323Links((html?.text||'')+'\n'+(doc.rawText||''),site))].filter(u=>{try{return new URL(u).hostname===host&&/about|service|services|treatment|price|offer|contact|من-?نحن|خدمات|عروض|اسعار|أسعار/i.test(decodeURIComponent(u))&&!have(u);}catch{return false;}}).slice(0,3);
+   for(const u of inner){if(signal.aborted||budget<=0)return;budget--;status('قراءة صفحة من موقع العميل: '+decodeURIComponent(new URL(u).pathname).slice(0,40));const p=await bp323Read(u,signal);if(signal.aborted)return;Object.assign(p,{linkedFrom333:site,identityReviewed:true,identityAuto333:'صفحة من موقع العميل',platform:'Website',kind:p.kind||'website'});s.sources.push(p);persist();}
+  }
+ }}
+
+// Sales-message statements that are not facts about the client: agency results and proposals
+// go to "agency offer" (not verified against client sources); market/competitor statements go
+// to the competitor study instead of being judged "couldn't verify".
+const TT333_AGENCY=/(?:^|[\s(«"])(?:الوكالة|وكالتنا|حققنا|حققت\s+(?:الوكالة|لعملائنا)|عملائنا|عملاءنا|فريقنا|خبرتنا|نقدر\s+ن|هنقدر|هنساعد|نساعدكم|هنبني|نبني\s+ل|نقترح|اقتراحنا)/;
+const TT333_PROPOSAL=/(?:^|\s)(?:هناك|في|توجد|تكمن)?\s*(?:ال)?فرص(?:ة|ه)(?=[\s،.:]|$)|(?:يمكن|ممكن)\s+(?:بناء|تحويل|نبني|نحول)|بناء\s+مسار|لتحويل\s+(?:ملايين\s+)?(?:ال)?مشاهدات/;
+const TT333_MARKET=/(?:^|\s)(?:ال)?(?:مراكز|عيادات|مستشفيات|المنافس(?:ين|ون)?|السوق)(?=[\s،.:]|$)/;
+function tt333Reclassify(list,c){return toArr(list).map(x=>{if(!x||x.subject==='agency')return x;const t=String(x.statement||'')+' '+String(x.sourceQuote||''),name=c?tt333Norm(bp324Official(c)):'';const aboutClient=/(?:^|\s)(?:العميل|عيادتكم|مركزكم|الدكتور|دكتور|د\.)/.test(t)||(name.length>3&&tt333Norm(t).includes(name));let subject=null,scope=x.scope;
+ if(TT333_AGENCY.test(t)){subject='agency';scope='عرض أو نتيجة للوكالة؛ يحتاج بيانات الوكالة ولا يتفحص بمصادر العميل';}
+ else if(TT333_PROPOSAL.test(t)&&!/(?:مش|لا|غياب|ضعف|مفيش)\s/.test(t)){subject='agency';scope='اقتراح في رسالة السيلز — مش ادعاء عن العميل يتحقق منه';}
+ else if(TT333_MARKET.test(t)&&!aboutClient&&x.subject!=='competitor'){subject='competitor';}
+ if(!subject)return x;const y={...x,subject,scope};if(subject==='agency')y.kind='agency';y.id='c329_'+bp329Hash(subject+'|'+(x.aspect||'')+'|'+bp329Norm(x.sourceQuote||''));return y;});}
+const claims333=bp324Claims;
+bp324Claims=function(raw,message){const c=getClient(STATE.clientId);return tt333Reclassify(claims333(raw,message),c);};
+
 function tt333Identity(c,text,failed){const n=tt333Norm(text),name=tt333Norm(bp324Official(c));if(name.length>3&&n.includes(name))return {ok:true,why:'اسم النشاط مذكور في المصدر'};for(const u of failed){try{const x=new URL(u),host=x.hostname.replace(/^www\./,'').toLowerCase();if(!bp324Social(u)&&host&&n.includes(host))return {ok:true,why:'دومين '+host+' مذكور في المصدر'};const handle=(x.pathname.split('/').filter(Boolean)[0]||'').toLowerCase();if(bp324Social(u)&&handle.length>3&&!/^(?:profile\.php|pages|people|groups|p|reel)$/.test(handle)&&n.includes(handle))return {ok:true,why:'اسم الحساب '+handle+' مذكور في المصدر'};}catch{}}return {ok:false};}
 async function tt333Alternates(c,signal,status){
  const s=bp323State(c),seeds=tt333Seeds(c),failed=seeds.filter(u=>{const x=s.sources.find(y=>canonicalURL(y.url)===canonicalURL(u));return !x||x.status!=='read';});
@@ -137,7 +177,7 @@ function tt333Decisions(c){
 
 // A study with no readable source still runs from the sales message + answers, marked preliminary.
 const run333=window.bp324RunStudy;
-window.bp324RunStudy=async function(cid,reuse=false){const r=await run333(cid,reuse);const c=getClient(cid);if(!c)return r;const s=bp323State(c);if(s.report){const docs=bp324Docs(c).filter(d=>!['meta_report','tracking_html'].includes(d.kind)),note='دراسة مبدئية: مفيش مصدر مقروء عن العميل؛ الأحكام مبنية على رسالة السيلز والإجابات بس.',lim=toArr(s.report.limits);if(!docs.length&&!lim.includes(note)){s.report.limits=[note,...lim];s.report.phase='preliminary';persist();render();}}return r;};
+window.bp324RunStudy=async function(cid,reuse=false){{const c=getClient(cid),cache=c&&bp323State(c).claimCache329;if(cache?.claims&&!cache.tt333){cache.claims=tt333Reclassify(cache.claims,c);cache.tt333=true;}}const r=await run333(cid,reuse);const c=getClient(cid);if(!c)return r;const s=bp323State(c);if(s.report){const docs=bp324Docs(c).filter(d=>!['meta_report','tracking_html'].includes(d.kind)),note='دراسة مبدئية: مفيش مصدر مقروء عن العميل؛ الأحكام مبنية على رسالة السيلز والإجابات بس.',lim=toArr(s.report.limits);if(!docs.length&&!lim.includes(note)){s.report.limits=[note,...lim];s.report.phase='preliminary';persist();render();}}return r;};
 
 // ---- Actions ----
 window.tt333Retry=async function(cid,i){const c=getClient(cid),s=c&&bp323State(c),x=s?.sources[i];if(!x)return;const url=x.url;await withJob(cid,'src333',async(signal,status)=>{status('إعادة قراءة '+tt333Host(url)+'…');TT333.browser.delete(canonicalURL(url));TT333.down=null;TT333.force.add(cid);let doc;try{doc=await bp323Read(url,signal);}finally{TT333.force.delete(cid);}if(signal.aborted)return;const cur=s.sources.find(y=>canonicalURL(y.url)===canonicalURL(url));for(const k of ['discoveryEvidenceURL','alternateFor333','identityReviewed','identityAuto333','platform','kind'])if(cur&&cur[k]!==undefined&&doc[k]===undefined)doc[k]=cur[k];if(cur)s.sources[s.sources.indexOf(cur)]=doc;else s.sources.push(doc);changed(c,(doc.status==='read'?'إعادة قراءة نجحت: ':'إعادة قراءة لسه متعذرة: ')+url);toast(doc.status==='read'?'اتقرأ المصدر. اضغط «حدّث التشخيص» علشان يدخل الدراسة.':'لسه متعذر: '+(doc.note||'')+' — تقدر تضيف نص أو صور بداله.');});};
@@ -169,7 +209,7 @@ function tt333Panel(c){
  for(const x of tt333Supp(c))if(x.status==='pending'&&!TT333.files.has(x.id)){x.status='failed';x.note='القراءة اتقطعت — ارفع الصورة تاني';}
  const s=bp323State(c),src=s.sources,sup=tt333Supp(c),busy=V.jobs.has(jobKey(c.id,'digitalAudit'))||V.jobs.has(jobKey(c.id,'src333')),job=V.jobs.get(jobKey(c.id,'src333'))||V.jobs.get(jobKey(c.id,'supp333')),err=V.errors[jobKey(c.id,'src333')]||V.errors[jobKey(c.id,'supp333')];
  const how={direct:'قراءة مباشرة',browser:'متصفح السيرفر'};
- const row=(x,i)=>{const used=x.status==='read'&&(!x.discoveryEvidenceURL||x.identityReviewed),identity=!!String(x.text||'').trim()&&(x.status==='identity_unverified'||(x.status==='read'&&!used));const state=used?['good','✓ اتقرأ']:identity?['warn','⚠ محتاج تأكيد إنه يخص العميل']:['bad','✕ اتعذّر'];const method=x.alternateFor333?'بديل عن '+tt333Host(x.alternateFor333):x.fromCache333?'محفوظ من قراءة سابقة':how[x.method333]||(used?'قراءة مباشرة':'');const tries=toArr(x.attempts333).filter(a=>!a.ok&&a.note).map(a=>(how[a.method]||a.method)+': '+a.note);
+ const row=(x,i)=>{const used=x.status==='read'&&(!x.discoveryEvidenceURL||x.identityReviewed),identity=!!String(x.text||'').trim()&&(x.status==='identity_unverified'||(x.status==='read'&&!used));const state=used?['good','✓ اتقرأ']:identity?['warn','⚠ محتاج تأكيد إنه يخص العميل']:['bad','✕ اتعذّر'];const method=x.alternateFor333?'بديل عن '+tt333Host(x.alternateFor333):x.linkedFrom333?'مذكور في '+tt333Host(x.linkedFrom333):x.fromCache333?'محفوظ من قراءة سابقة':how[x.method333]||(used?'قراءة مباشرة':'');const tries=toArr(x.attempts333).filter(a=>!a.ok&&a.note).map(a=>(how[a.method]||a.method)+': '+a.note);
   return `<li class="tt333-row ${state[0]}"><div><b>${E(state[1])}</b> · ${link(x.url,tt333Host(x.url))}${x.platform?` <span class="v-tag">${E(x.platform)}</span>`:''}<small>${E([method,x.identityAuto333,used?'':x.note,...(used?[]:tries)].filter(Boolean).join(' · '))}</small></div><div class="v-actions">${!used&&!identity?`<button class="btn btn-ghost btn-sm" ${busy?'disabled':''} onclick="tt333Retry('${c.id}',${i})">أعد المحاولة</button>`:''}${identity?`<button class="btn btn-ghost btn-sm" onclick="tt333ConfirmIdentity('${c.id}',${i})">ده يخص العميل</button>`:''}${!used?`<button class="btn btn-ghost btn-sm" onclick="tt333OpenAdd('${c.id}',${i})">أضف نص/صور بداله</button>`:''}</div></li>`;};
  const supRow=x=>`<li class="tt333-row ${x.status==='read'?'good':x.status==='pending'?'warn':'bad'}"><div><b>${x.status==='read'?'✓ من الفريق':x.status==='pending'?'… بتتقري':'✕ اتعذّرت قراءتها'}</b> · ${E(x.label||x.name||'مادة من الفريق')}<small>${E([{text:'نص ملصوق',file:'ملف',image:'صورة'}[x.kind],x.name,x.forURL?'بدل '+tt333Host(x.forURL):'',x.note].filter(Boolean).join(' · '))}</small></div><div class="v-actions"><button class="btn btn-ghost btn-sm" onclick="tt333RemoveSupp('${c.id}','${x.id}')">حذف</button></div></li>`;
  const read=src.filter(x=>x.status==='read'&&(!x.discoveryEvidenceURL||x.identityReviewed)).length+sup.filter(x=>x.status==='read').length,failed=src.filter(x=>x.status!=='read').length,alt=src.filter(x=>x.alternateFor333&&x.status==='read').length;

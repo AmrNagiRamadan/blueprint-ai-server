@@ -14,6 +14,9 @@ const SITE = 'https://clinic.example/';
 const SITE2 = 'https://clinic-two.example/';
 const FB = 'https://www.facebook.com/smileclinic';
 const NAME = 'عيادة الابتسامة';
+const DR_FB = 'https://www.facebook.com/dr.amrziz';
+const DR_BIO = 'دكتور العيلة - د. عمرو عبد العزيز Cairo | دكتور العيلة - د. عمرو عبد العزيز 402K followers • 56 following Intro دكتور عمرو عبد العزيز .. جراح أمراض النساء والتوليد، واستشاري الحقن المجهري وأطفال الأنابيب وتحديد جنس المولود، ملتزم برعاية صحة المرأة ودعمها في تحقيق حلم الأمومة. خريج كلية الطب جامعة القاهرة و برمنجهام - إنجلترا.📞للتواصل : 16431 Page · Obstetrician-Gynecologist (OBGYN) 360 شارع الهرم - الجيزة - الدور الأول، Cairo, Egypt +20 16431 amrziz@hotmail.com dr.amrziz ivfegypt.org In-store pickup Price Range · $$$$ 6m · 6 minutes ago اللام بعد الحقن المجهري بيفضل قد ايه؟؟... [reel](https://www.facebook.com/reel/4732289180393971/)';
+const DR_MSG = 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة. مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة. تكمن الفرصة الأضخم الآن في بناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل ملايين المشاهدات إلى عمليات فعلية بأعلى كفاءة. الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة.';
 const SITE_TEXT = `${NAME} لتقويم وزراعة الأسنان في المهندسين.\n` + 'نقدم خدمات تقويم الأسنان وزراعة الأسنان وتبييض الأسنان بأحدث الأجهزة في شارع لبنان بالمهندسين.\n'.repeat(6);
 
 const results = [];
@@ -34,6 +37,11 @@ function fakeNetwork(ctx, net) {
       net.ai.push(prompt);
       if (Array.isArray(msg)) return json(route, 200, ai(`${NAME}\nعرض تقويم الأسنان بخصم 20% لحد آخر الشهر\nوصف مرئي: بوست صورة`));
       if (net.mode.aiDown) return json(route, 500, { error: 'down' });
+      if (/فكك رسالة السيلز/.test(prompt) && prompt.includes('دكتور عمرو')) return json(route, 200, ai({ claims: [
+        { statement: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', sourceQuote: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', kind: 'fact' },
+        { statement: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', sourceQuote: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', kind: 'fact' },
+        { statement: 'هناك فرصة كبيرة لبناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل المشاهدات إلى عمليات فعلية بكفاءة عالية', sourceQuote: 'تكمن الفرصة الأضخم الآن في بناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل ملايين المشاهدات إلى عمليات فعلية بأعلى كفاءة', kind: 'problem' },
+        { statement: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', sourceQuote: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', kind: 'fact' }] }));
       if (/فكك رسالة السيلز/.test(prompt)) return json(route, 200, ai({ claims: [{ statement: 'العميل مش بيستخدم فيديوهات', sourceQuote: 'مش بيعمل فيديوهات', kind: 'problem', scope: 'المحتوى' }] }));
       if (/^حوّل نتيجة بحث الويب/.test(prompt)) { const m = [...prompt.matchAll(/\{"alternates":\[[\s\S]*?\]\}/g)].at(-1); return json(route, 200, ai(m ? m[0] : {})); }
       if (/^استخرج معلومات صريحة/.test(prompt)) return json(route, 200, ai({ officialName: { value: '', quote: '' }, evidence: [], facts: [], posts: [] }));
@@ -61,6 +69,8 @@ function fakeNetwork(ctx, net) {
     if (url.startsWith('https://r.jina.ai/')) {
       const target = url.slice('https://r.jina.ai/'.length);
       net.jina.push(target);
+      if (target.startsWith(DR_FB)) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: دكتور العيلة - د. عمرو عبد العزيز | Facebook\nURL Source: ${DR_FB}\nMarkdown Content:\n${DR_BIO}\n` });
+      if (target.startsWith('https://ivfegypt.org')) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: IVF Egypt - Dr. Amr Abdelaziz\nURL Source: https://ivfegypt.org/\nMarkdown Content:\nمركز د. عمرو عبد العزيز للحقن المجهري وأطفال الأنابيب. خدماتنا: الحقن المجهري، تأخر الإنجاب، تحديد جنس المولود، جراحات المناظير.\n${'نستقبل الحالات في عيادة الهرم بالجيزة. '.repeat(8)}\n[خدماتنا](https://ivfegypt.org/services/)` });
       if (target.startsWith(FB) && !net.mode.fbDown) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: ${NAME} | Facebook\nURL Source: ${FB}\nMarkdown Content:\n${NAME} لتقويم وزراعة الأسنان في المهندسين\n12 ألف متابع · 300 منشور\nمعلومات الصفحة: عيادة أسنان في شارع لبنان بالمهندسين وبنقدم تقويم وزراعة\nأحدث منشور: عرض تقويم الأسنان بخصم لحد آخر الشهر للمرضى الجدد\n` });
       return route.fulfill({ status: 451, body: 'blocked' });
     }
@@ -232,6 +242,23 @@ await check('nothing readable + sales message → preliminary study, not an erro
   assert.equal(r.error, '', r.error);
   assert.ok(r.report);
   assert.ok(r.limits.some(x => /دراسة مبدئية/.test(x)));
+});
+
+// The client from the screenshots: Facebook page whose bio names the website as a bare domain.
+await check('doctor page: website named in the bio is found and read; agency/proposal/market statements are not judged as unverifiable client claims', async () => {
+  const cd = await page.evaluate(([fb, msg]) => { const c = { id: uid(), name: 'دكتور العيلة', biz: 'نسا وحقن مجهري', createdAt: Date.now(), answers: { biz: 'نسا وحقن مجهري' }, preAudit: { type: 'new' } }; DB.clients.unshift(c); const s = bp323State(c); s.sourceURL = fb; s.message = msg; persist(); return c.id; }, [DR_FB, DR_MSG]);
+  const r = await runStudy(page, cd);
+  assert.equal(r.error, '', r.error);
+  const st = await page.evaluate(cid => { const c = getClient(cid), s = bp323State(c); return { sources: s.sources.map(x => [x.url, x.status, x.linkedFrom333 || '']), website: auditState(c).website, claims: (s.pendingClaims329 || []).map(x => [x.subject, x.statement.slice(0, 25)]), agency: (s.report?.agencyOffers || []).length, tracking: s.trackingProbe?.status }; }, cd);
+  const site = st.sources.find(x => x[0].startsWith('https://ivfegypt.org/') && x[0].length <= 'https://ivfegypt.org/'.length);
+  assert.ok(site, 'site discovered: ' + JSON.stringify(st.sources));
+  assert.equal(site[1], 'read'); assert.equal(site[2], DR_FB);
+  assert.ok(st.sources.some(x => /ivfegypt\.org\/services/.test(x[0])), 'services page read too');
+  assert.ok(!st.sources.some(x => /hotmail/.test(x[0])), 'email domain is not a website');
+  assert.equal(st.website, 'https://ivfegypt.org/');
+  const subj = Object.fromEntries(['client', 'competitor', 'agency'].map(k => [k, st.claims.filter(x => x[0] === k).length]));
+  assert.deepEqual(subj, { client: 1, competitor: 1, agency: 2 }, JSON.stringify(st.claims));
+  assert.equal(st.agency, 2, 'agency result + proposal shown as agency offers');
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
