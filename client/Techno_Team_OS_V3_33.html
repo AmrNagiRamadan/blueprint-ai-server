@@ -6543,7 +6543,7 @@ const TT333_OCR_PROMPT='انسخ كل النص الظاهر في الصورة د
 // The client a running study/research job belongs to (not necessarily the one on screen).
 function tt333StudyClient(){const ids=[...new Set([...V.jobs.keys()].filter(k=>/:(?:digitalAudit|research|comp|src333)$/.test(k)).map(k=>k.split(':')[0]))];if(ids.length===1)return getClient(ids[0]);if(ids.includes(STATE.clientId)||!ids.length)return getClient(STATE.clientId);return getClient(ids[0]);}
 function tt333Norm(t){return bp329Norm(String(t||'')).replace(/\s+/g,' ').trim();}
-function tt333ServerBase(){const ep=String(getAIEndpoint()||'').trim().replace(/\/+$/,''),m=ep.match(/^(https?:\/\/.+?)\/api\/(?:ai|openai)$/i);return m?m[1]:'';}
+function tt333ServerBase(){const ep=String(getAIEndpoint()||'').trim().replace(/\/+$/,''),m=ep.match(/^(https?:\/\/.+?)\/api\/(?:ai|openai)$/i);if(m){try{localStorage.setItem('bp_server_base',m[1]);}catch{}return m[1];}try{return localStorage.getItem('bp_server_base')||'';}catch{return '';}}
 function tt333Token(){try{return localStorage.getItem('bp_server_token')||'';}catch{return '';}}
 function tt333JobClient(signal){if(!signal)return null;for(const [key,j] of V.jobs)if(j.controller.signal===signal)return getClient(key.split(':')[0]);return null;}
 function tt333Supp(c){const s=bp323State(c);if(!Array.isArray(s.supplements333))s.supplements333=[];return s.supplements333;}
@@ -6557,7 +6557,8 @@ aiReady=function(){const ep=String(getAIEndpoint()||'').trim();return /\/api\/(a
 
 // Optional access token for the Blueprint server (BLUEPRINT_TOKEN on Vercel).
 const requestJSON333=requestJSON;
-requestJSON=function(url,body,headers={},signal){const base=tt333ServerBase(),token=tt333Token();if(base&&token&&String(url).startsWith(base+'/api/'))headers={...headers,'X-Blueprint-Token':token,...(String(url).startsWith(base+'/api/read')?{Authorization:'Bearer '+token}:{})};return requestJSON333(url,body,headers,signal);};
+function tt333Qwen(url){return /dashscope(?:-intl)?\.aliyuncs\.com/i.test(String(url));}
+requestJSON=function(url,body,headers={},signal){if(tt333Qwen(url)&&body&&Array.isArray(body.messages)){body={...body};const last=body.messages.at(-1)?.content,hasImage=Array.isArray(last)&&last.some(x=>x?.type==='image_url'),text=Array.isArray(last)?last.map(x=>x?.text||'').join(' '):String(last||'');if(body.max_tokens>8192)body.max_tokens=8192;if(hasImage&&!/vl|omni/i.test(String(body.model||'')))body.model='qwen-vl-max';if(!hasImage&&/JSON/.test(text)&&!body.response_format)body.response_format={type:'json_object'};}const base=tt333ServerBase(),token=tt333Token();if(base&&token&&String(url).startsWith(base+'/api/'))headers={...headers,'X-Blueprint-Token':token,...(String(url).startsWith(base+'/api/read')?{Authorization:'Bearer '+token}:{})};return requestJSON333(url,body,headers,signal);};
 const aiSettings333=openAISettings;
 openAISettings=function(){aiSettings333.apply(this,arguments);const out=document.getElementById('ai_test_out');if(out&&!document.getElementById('bpServerToken333'))out.insertAdjacentHTML('beforebegin',field('رمز وصول سيرفر Blueprint (اختياري)','bpServerToken333',tt333Token(),'password','لو ضفت BLUEPRINT_TOKEN في Vercel اكتبه هنا. بيتحفظ في المتصفح ده بس ومش بيدخل النسخ الاحتياطية.'));};
 document.addEventListener('input',e=>{if(e.target.id==='bpServerToken333'){try{localStorage.setItem('bp_server_token',e.target.value.trim());}catch{}}});
