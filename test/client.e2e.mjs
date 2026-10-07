@@ -413,6 +413,31 @@ await check('round 12: all content types with shares, same-platform post links, 
   assert.ok(reopened, 'section stays open after re-render');
 });
 
+await check('verification engine: rating compared with the source, website and branch confirmed, agency rows removed', async () => {
+  const r = await page.evaluate(() => {
+    const claims = [
+      { id: 'a', statement: 'العميل حصل على تقييم 5.0 من أكثر من 130 مريضا', sourceQuote: 'تقييمكم الاستثنائي (5.0 من أكثر من 130 مريضا)', subject: 'client', kind: 'fact' },
+      { id: 'b', statement: 'لدى العميل موقع إلكتروني', sourceQuote: 'موقعكم', subject: 'client', kind: 'fact' },
+      { id: 'c', statement: 'العميل يمتلك فرعًا في الهرم', sourceQuote: 'فرعكم في الهرم', subject: 'client', kind: 'fact' },
+      { id: 'd', statement: 'الوكالة تدعي أن حملاتها تحقق أعلى عائد على الإنفاق الإعلاني', sourceQuote: 'تحقق أعلى عائد', subject: 'client', kind: 'fact' }];
+    const docs = [{ url: 'https://site.example/', kind: 'website', text: 'عيادة النور لطب الأسنان\nفرع الهرم: 12 شارع الهرم\n' + 'خدمات تقويم وزراعة. '.repeat(10) }, { url: 'https://www.vezeeta.com/ar/dr-x', kind: 'source', text: 'عيادة النور\n4.6 ★ (98 reviews)' }];
+    const out = bp324Validate({ claims: [], sections: [], findings: [], positioning: {}, limits: [], nextQuestions: [] }, docs, claims);
+    return { problems: out.problems.map(p => [p.id || p.statement.slice(0, 12), p.verdict, (p.evidence || [])[0]?.quote || '', p.reason]), agency: (out.agencyOffers || []).map(x => x.statement) };
+  });
+  const by = k => r.problems.find(p => p[3] && p[0] && (p[0] === k || true) && false) || null; void by;
+  const rating = r.problems.find(p => /4\.6/.test(p[2]));
+  assert.ok(rating, JSON.stringify(r.problems)); assert.equal(rating[1], 'unsupported'); assert.match(rating[3], /4\.6 من 98/);
+  assert.ok(r.problems.some(p => p[1] === 'confirmed' && /site\.example|النور/.test(p[3] + p[2])), 'website confirmed');
+  assert.ok(r.problems.some(p => p[1] === 'confirmed' && /الهرم/.test(p[2])), 'branch confirmed');
+  assert.ok(!r.problems.some(p => /الوكالة/.test(p[0] + p[3])) && r.agency.some(x => /الوكالة/.test(x)), 'agency row removed');
+});
+
+await check('«ابدأ الدراسة» moves to the next stage when the study finishes cleanly', async () => {
+  const st = await page.evaluate(async cid => { go('client', cid, 'overview'); const html = document.getElementById('app').innerHTML; await tt333StartStudy(cid); return { btn: /tt333StartStudy/.test(html), err: V.errors[jobKey(cid, 'digitalAudit')] || '', tab: STATE.tab, pick: V.picks['unified324' + cid] }; }, cid);
+  assert.ok(st.btn, 'button uses the new action'); assert.equal(st.err, '', st.err);
+  assert.equal(st.tab, 'digitalAudit'); assert.equal(st.pick, 'facts');
+});
+
 await check('server token is sent only to the Blueprint server', async () => {
   await page.evaluate(() => localStorage.setItem('bp_server_token', 'tok'));
   const headers = [];
