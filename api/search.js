@@ -2,6 +2,13 @@ import { guard } from './_lib/guard.js';
 
 const endpoint = 'https://api.openai.com/v1/responses';
 const allowedModels = new Set(['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-5', 'gpt-5-mini']);
+// Credit: search runs on the cheap model with a small search context unless the owner opts in
+// to a bigger one with OPENAI_SEARCH_MODEL (a saved client setting alone can't raise the cost).
+export const CHEAP_SEARCH_MODEL = 'gpt-4.1-mini';
+export function searchModel(requested, env = process.env) {
+  if (env.OPENAI_SEARCH_MODEL) return env.OPENAI_SEARCH_MODEL;
+  return requested === 'gpt-4.1-nano' ? requested : CHEAP_SEARCH_MODEL;
+}
 
 function publicUrl(value) {
   try {
@@ -17,7 +24,7 @@ function publicUrl(value) {
 async function runSearch(key, model, input, maxTokens, toolType, signal) {
   const payload = {
     model, input,
-    tools: [{ type: toolType }],
+    tools: [{ type: toolType, search_context_size: process.env.OPENAI_SEARCH_CONTEXT || 'low' }],
     tool_choice: 'required',
     max_output_tokens: maxTokens,
     store: false
@@ -73,7 +80,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'INVALID_INPUT' });
   }
 
-  const model = allowedModels.has(body.model) ? body.model : 'gpt-4.1';
+  const model = searchModel(allowedModels.has(body.model) ? body.model : '');
   const maxTokens = Math.min(5000, Math.max(400, +body.max_output_tokens || 4000));
   const controller = new AbortController();
   // Must finish before Vercel's maxDuration (60s) kills the function.
@@ -83,7 +90,12 @@ export default async function handler(req, res) {
     const attempts = [];
     for (const toolType of ['web_search', 'web_search_preview']) {
       const r = await runSearch(key, model, body.input, maxTokens, toolType, controller.signal);
-      if (!r.ok) { attempts.push({ tool: toolType, upstreamStatus: r.status, message: r.message }); continue; }
+      if (!r.ok) {
+        attempts.push({ tool: toolType, upstreamStatus: r.status, message: r.message });
+        // Only an unsupported-tool error is worth a second paid attempt with the preview tool.
+        if (r.status === 400 && /tool|web_search/i.test(r.message)) continue;
+        break;
+      }
       attempts.push(r.diag);
       // A completed search without sources is an answer; repeating it with the preview tool doubles the cost.
       if (!r.sources.length) break;

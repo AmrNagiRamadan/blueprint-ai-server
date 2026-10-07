@@ -9,3 +9,6 @@ test('page description from meta tags is used when the body has no text (JS-rend
 
 import {cleanBrowserTmp} from '../lib/reader.js';import {mkdtemp,mkdir,writeFile,readdir} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
 test('leftover browser profiles are removed from tmp, other files are kept',async()=>{const d=await mkdtemp(join(tmpdir(),'rt-'));await mkdir(join(d,'playwright_chromiumdev_profile-abc'));await writeFile(join(d,'core.123'),'x');await writeFile(join(d,'chromium'),'binary');await cleanBrowserTmp(d);assert.deepEqual(await readdir(d),['chromium']);});
+
+import {chatModel} from '../api/ai.js';import {searchModel} from '../api/search.js';
+test('credit: the app cannot pick an expensive model unless the owner allows it',()=>{assert.equal(chatModel('gpt-4.1-mini','gpt-4.1-mini',{}),'gpt-4.1-mini');for(const m of ['gpt-4.1','gpt-4o','gpt-5','o3',undefined])assert.equal(chatModel(m,'gpt-4.1-mini',{}),'gpt-4.1-mini');assert.equal(chatModel('gpt-4.1','x',{OPENAI_ALLOW_ANY_MODEL:'1'}),'gpt-4.1');assert.equal(searchModel('gpt-4.1',{}),'gpt-4.1-mini');assert.equal(searchModel('gpt-4.1',{OPENAI_SEARCH_MODEL:'gpt-4.1'}),'gpt-4.1');});
