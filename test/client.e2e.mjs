@@ -17,7 +17,7 @@ const FB = 'https://www.facebook.com/smileclinic';
 const NAME = 'عيادة الابتسامة';
 const DR_FB = 'https://www.facebook.com/dr.amrziz';
 const DR_BIO = 'دكتور العيلة - د. عمرو عبد العزيز Cairo | دكتور العيلة - د. عمرو عبد العزيز 402K followers • 56 following Intro دكتور عمرو عبد العزيز .. جراح أمراض النساء والتوليد، واستشاري الحقن المجهري وأطفال الأنابيب وتحديد جنس المولود، ملتزم برعاية صحة المرأة ودعمها في تحقيق حلم الأمومة. خريج كلية الطب جامعة القاهرة و برمنجهام - إنجلترا.📞للتواصل : 16431 Page · Obstetrician-Gynecologist (OBGYN) 360 شارع الهرم - الجيزة - الدور الأول، Cairo, Egypt +20 16431 amrziz@hotmail.com dr.amrziz ivfegypt.org In-store pickup Price Range · $$$$ 6m · 6 minutes ago اللام بعد الحقن المجهري بيفضل قد ايه؟؟... [reel](https://www.facebook.com/reel/4732289180393971/)';
-const DR_MSG = 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة. مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة. تكمن الفرصة الأضخم الآن في بناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل ملايين المشاهدات إلى عمليات فعلية بأعلى كفاءة. الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة.';
+const DR_MSG = 'لاحظنا نجاحكم الكبير في التوعية الجماهيرية. دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة. مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة. تكمن الفرصة الأضخم الآن في بناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل ملايين المشاهدات إلى عمليات فعلية بأعلى كفاءة. الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة.';
 const SITE_TEXT = `${NAME} لتقويم وزراعة الأسنان في المهندسين.\n` + 'نقدم خدمات تقويم الأسنان وزراعة الأسنان وتبييض الأسنان بأحدث الأجهزة في شارع لبنان بالمهندسين.\n'.repeat(6);
 
 const results = [];
@@ -44,6 +44,8 @@ function fakeNetwork(ctx, net) {
         { statement: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', sourceQuote: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', kind: 'fact' },
         { statement: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', sourceQuote: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', kind: 'fact' },
         { statement: 'هناك فرصة كبيرة لبناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل المشاهدات إلى عمليات فعلية بكفاءة عالية', sourceQuote: 'تكمن الفرصة الأضخم الآن في بناء مسار تأهيل وحجز مخصص لحالات الحقن المجهري وتأخر الإنجاب لتحويل ملايين المشاهدات إلى عمليات فعلية بأعلى كفاءة', kind: 'problem' },
+        { statement: 'العميل حقق نجاحًا كبيرًا في التوعية الجماهيرية', sourceQuote: 'لاحظنا نجاحكم الكبير في التوعية الجماهيرية', kind: 'fact' },
+        { statement: 'الرسالة لا تحتوي على أي ذكر لعنوان فعلي للعيادات سوى زايد والتجمع', sourceQuote: 'زايد والتجمع', kind: 'fact' },
         { statement: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', sourceQuote: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', kind: 'fact' }] }));
       if (/فكك رسالة السيلز/.test(prompt)) return json(route, 200, ai({ claims: [{ statement: 'العميل مش بيستخدم فيديوهات', sourceQuote: 'مش بيعمل فيديوهات', kind: 'problem', scope: 'المحتوى' }] }));
       if (/^حوّل نتيجة بحث الويب/.test(prompt)) { const m = [...prompt.matchAll(/\{"alternates":\[[\s\S]*?\]\}/g)].at(-1); return json(route, 200, ai(m ? m[0] : {})); }
@@ -271,7 +273,8 @@ await check('doctor page: website named in the bio is found and read; agency/pro
   assert.ok(!st.sources.some(x => /hotmail/.test(x[0])), 'email domain is not a website');
   assert.equal(st.website, 'https://ivfegypt.org/');
   const subj = Object.fromEntries(['client', 'competitor', 'agency'].map(k => [k, st.claims.filter(x => x[0] === k).length]));
-  assert.deepEqual(subj, { client: 1, competitor: 1, agency: 2 }, JSON.stringify(st.claims));
+  assert.deepEqual(subj, { client: 2, competitor: 1, agency: 2 }, JSON.stringify(st.claims));
+  assert.ok(!st.claims.some(x => /^الرسالة لا تحتوي/.test(x[1])), 'meta statement about the message is dropped');
   assert.equal(st.agency, 2, 'agency result + proposal shown as agency offers');
 });
 
@@ -318,6 +321,24 @@ await check('a site named on the page but not naming the client is not accepted 
   assert.equal(r[0], ''); assert.ok(r[1] && typeof r[1] === 'string', JSON.stringify(r));
   const notes = await page.evaluate(() => DB.clients.flatMap(c => bp323State(c).sources.map(x => x.identityAuto333 || '')).join('|'));
   assert.doesNotMatch(notes, /object Promise/);
+});
+
+await check('reach claim is partly supported by the follower count; ad platforms are not filled from organic presence', async () => {
+  const st = await page.evaluate(() => { const c = DB.clients.find(x => x.name === 'دكتور العيلة'); const p = (bp323State(c).report?.problems || []).find(x => /التوعية/.test(x.statement)); const before = auditState(c).proposals.length; const n = bp324AddFacts(c, [{ field: 'platformsUsed', value: 'YouTube', evidence: [{ url: 'https://www.facebook.com/dr.amrziz', quote: '402K followers' }] }], bp324Docs(c)); return { verdict: p?.verdict, ev: (p?.evidence || []).map(e => e.quote).join('|'), added: auditState(c).proposals.length - before }; });
+  assert.equal(st.verdict, 'partial'); assert.match(st.ev, /402K followers/); assert.equal(st.added, 0);
+});
+
+await check('tracking found in the site code answers the tracking question', async () => {
+  const v = await page.evaluate(cid => getClient(cid).answers.tracking, cid);
+  assert.deepEqual(v, ['Meta Pixel']);
+});
+
+await check('sidebar lists the client accounts and the sales message', async () => {
+  await page.evaluate(cid => go('client', cid, 'overview'), cid);
+  const side = await page.locator('.tt333-side').innerText();
+  assert.match(side, /حسابات العميل/); assert.match(side, /Facebook/); assert.match(side, /رسالة السيلز/);
+  const hrefs = await page.locator('.tt333-side a').evaluateAll(a => a.map(x => x.href));
+  assert.ok(hrefs.some(h => h.startsWith('https://clinic.example')), JSON.stringify(hrefs));
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
