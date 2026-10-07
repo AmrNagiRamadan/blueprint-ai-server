@@ -49,6 +49,7 @@ function fakeNetwork(ctx, net) {
         { statement: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', sourceQuote: 'الوكالة حققت عائد إعلاني يصل إلى 6 أضعاف عبر منظومة استقطاب متكاملة لحالات العمليات والجراحات الدقيقة', kind: 'fact' }] }));
       if (/فكك رسالة السيلز/.test(prompt)) return json(route, 200, ai({ claims: [{ statement: 'العميل مش بيستخدم فيديوهات', sourceQuote: 'مش بيعمل فيديوهات', kind: 'problem', scope: 'المحتوى' }] }));
       if (/^حوّل نتيجة بحث الويب/.test(prompt)) { const m = [...prompt.matchAll(/\{"alternates":\[[\s\S]*?\]\}/g)].at(-1); return json(route, 200, ai(m ? m[0] : {})); }
+      if (/^استخرج معلومات صريحة/.test(prompt) && prompt.includes('url="' + DR_FB)) return json(route, 200, ai({ officialName: { value: '', quote: '' }, evidence: [], facts: [{ field: 'description', value: 'جراح نسا وتوليد وحقن مجهري ' + net.ai.length, evidence: [{ url: DR_FB, quote: 'جراح أمراض النساء والتوليد' }] }], posts: [] }));
       if (/^استخرج معلومات صريحة/.test(prompt)) return json(route, 200, ai({ officialName: { value: '', quote: '' }, evidence: [], facts: [], posts: [] }));
       if (/^أنت مدقق تسويق رقمي/.test(prompt)) {
         const keys = [...prompt.matchAll(/\["(\w+)","/g)].map(m => m[1]);
@@ -339,6 +340,26 @@ await check('sidebar lists the client accounts and the sales message', async () 
   assert.match(side, /حسابات العميل/); assert.match(side, /Facebook/); assert.match(side, /رسالة السيلز/);
   const hrefs = await page.locator('.tt333-side a').evaluateAll(a => a.map(x => x.href));
   assert.ok(hrefs.some(h => h.startsWith('https://clinic.example')), JSON.stringify(hrefs));
+});
+
+await check('approve → refresh does not loop: no re-extraction, no new proposals, report becomes approvable', async () => {
+  const before = await page.evaluate(() => { const c = DB.clients.find(x => x.name === 'دكتور العيلة'); return { id: c.id, proposals: auditState(c).proposals.length }; });
+  assert.ok(before.proposals >= 1, 'study proposed a fact');
+  const blockers = await page.evaluate(cid => { bp324Approve(cid); return document.querySelector('.v-modal')?.innerText || ''; }, before.id);
+  assert.match(blockers, /معلومة مقترحة محتاجة اعتماد/);
+  await page.evaluate(cid => { closeModal(); const c = getClient(cid), d = auditState(c); for (const p of d.proposals) c.answers[p.key || p.field] = p.value; d.proposals = []; changed(c); }, before.id);
+  const n = net.ai.length;
+  const r = await page.evaluate(cid => { go('dashboard'); return bp324RunStudy(cid, true).then(() => { const c = getClient(cid); return { err: V.errors[jobKey(cid, 'digitalAudit')] || '', proposals: auditState(c).proposals.length, refresh: bp324NeedsRefresh(c) }; }); }, before.id);
+  assert.equal(r.err, '', r.err);
+  assert.equal(net.ai.slice(n).filter(x => /^استخرج معلومات صريحة/.test(x)).length, 0, 'no re-extraction');
+  assert.equal(r.proposals, 0, 'no new proposals');
+  assert.equal(r.refresh, false, 'report is current');
+});
+
+await check('content mix: preliminary shares before review; post link taken from the reel URL', async () => {
+  const r = await page.evaluate(() => { const today = new Date().toISOString().slice(0, 10); const posts = [{ id: 'a', url: 'https://www.facebook.com/dr.amrziz', date: today, text: 'الالم بعد الحقن المجهري https://www.facebook.com/reel/4732289180393971/', category: 'تعليمي', format: 'فيديو' }, { id: 'b', url: 'https://www.facebook.com/dr.amrziz', date: today, text: 'عرض', category: 'عرض وبيع', format: 'صورة' }]; const html = bp323ContentHTML(posts); return { html, url: posts[0].url }; });
+  assert.match(r.html, /نسب مبدئية من 2 منشور/); assert.match(r.html, /تعليمي/); assert.match(r.html, /(?:50|٥٠)%/);
+  assert.equal(r.url, 'https://www.facebook.com/reel/4732289180393971/');
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
