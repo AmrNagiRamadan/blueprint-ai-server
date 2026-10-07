@@ -40,6 +40,8 @@ function fakeNetwork(ctx, net) {
       net.ai.push(prompt);
       if (Array.isArray(msg)) return json(route, 200, ai(`${NAME}\nعرض تقويم الأسنان بخصم 20% لحد آخر الشهر\nوصف مرئي: بوست صورة`));
       if (net.mode.aiDown) return json(route, 500, { error: 'down' });
+      if (/^اكتب الجزء الاستراتيجي من خطة تسويق/.test(prompt)) return json(route, 200, ai({ summary: [{ title: 'صورتنا', text: 'خبرة طويلة' }, { title: 'المنتج البطل', text: 'كشف أول' }, { title: 'التنفيذ', text: 'ميتا أولًا' }, { title: 'الاستمرار', text: 'محتوى أسبوعي' }], assets: [{ title: 'جمهور كبير', text: '402K' }], bigIdea: { statement: 'الثقة قبل الحجز', support: 'x' }, market: { note: 'وسط السوق', competitors: [{ name: 'منافس 1', price: '500 جنيه', note: '' }, { name: 'منافس 2', price: '800', note: '' }], source: 'دراسة المنافسين' }, personas: [{ name: 'زوجة متأخرة في الإنجاب', who: 'x', need: 'y', offer: 'كشف' }], ladder: [{ name: 'كشف', price: '500', note: '' }, { name: 'حقن', price: 'يحدده العميل', note: '' }], hero: { name: 'كشف الخصوبة', why: ['a', 'b'] }, journey: [{ step: 'يشوف', text: 'x' }, { step: 'يسأل', text: 'y' }], budgetSplit: [{ platform: 'Meta', pct: 75, why: 'الجمهور هناك' }, { platform: 'Google', pct: 25, why: 'بحث' }], targets: [{ label: 'محادثات', value: '300', note: 'تقديري' }], requirements: ['صور العيادة'], first30: [{ day: 'اليوم 1-3', task: 'إعداد التتبع', owner: 'الفريق' }], nextPhases: [{ name: 'توسع', period: 'شهر 2', goal: 'x' }], missing: ['أسعار الباقات'] }));
+      if (/^اكتب جزء المحتوى والتشغيل من خطة تسويق/.test(prompt)) { if (net.mode.deckBDown) return json(route, 500, { error: 'down' }); return json(route, 200, ai({ postsPerMonth: 20, contentAxes: [{ axis: 'تعليمي', pct: 40, example: 'x' }, { axis: 'إثبات ثقة', pct: 60, example: 'y' }], ideas: Array.from({ length: 12 }, (_, i) => ({ title: 'فكرة ' + (i + 1), format: 'ريل', axis: 'تعليمي' })), examples: [{ title: 'مثال', hook: 'h', body: 'b', format: 'ريل' }], ads: [{ name: 'إعلان 1', primaryText: 'نص', headline: 'عنوان', cta: 'احجز', visual: 'فيديو' }], calendar: [{ week: 'الأسبوع 1', days: [{ day: 'السبت', idea: 'فكرة السبت' }, { day: 'الاثنين', idea: 'فكرة الاثنين' }] }], production: { title: 'يوم تصوير', output: [{ type: 'ريلز', count: 20 }, { type: 'صور', count: 8 }], plan: ['x'] }, management: { daily: ['متابعة الرسائل'], weekly: ['تقرير'], monthly: ['مراجعة'], roles: [{ role: 'ميديا باير', task: 'x' }] }, replies: [{ trigger: 'لما العميل يسأل عن السعر', text: 'أهلًا' }], kpis: [{ name: 'تكلفة المحادثة', why: 'x' }], afterSale: ['رسالة شكر'], missing: [] })); }
       if (/فكك رسالة السيلز/.test(prompt) && prompt.includes('دكتور عمرو')) return json(route, 200, ai({ claims: [
         { statement: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', sourceQuote: 'دكتور عمرو له مكانة رائدة في جراحة النساء والحقن المجهري في عيادات دكتور العيلة', kind: 'fact' },
         { statement: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', sourceQuote: 'مراكز الحقن المجهري في زايد والتجمع تستحوذ على الحالات عبر مسارات تقييم أولية سريعة تؤدي لمحادثات حجز مؤكدة', kind: 'fact' },
@@ -452,6 +454,31 @@ await check('manual identity confirmation survives the next run', async () => {
   await runStudy(page, cid);
   const x = await page.evaluate(([cid, fb]) => bp323State(getClient(cid)).sources.find(y => canonicalURL(y.url) === canonicalURL(fb)), [cid, FB]);
   assert.equal(x.status, 'read'); assert.equal(x.identityReviewed, true);
+});
+
+await check('marketing-plan report: 23 slides, cached, failed part retried alone, wording follows business type', async () => {
+  const grab = (cid) => page.evaluate(async cid => { let blob = null; const u = URL.createObjectURL, k = HTMLAnchorElement.prototype.click; URL.createObjectURL = b => { blob = b; return 'blob:x'; }; HTMLAnchorElement.prototype.click = function () {}; try { const r = await tt333PlanDeck(cid); return { html: blob ? await blob.text() : '', failed: r?.failed || [] }; } finally { URL.createObjectURL = u; HTMLAnchorElement.prototype.click = k; } }, cid);
+  const deckCalls = from => net.ai.slice(from).filter(x => /^اكتب (?:الجزء الاستراتيجي|جزء المحتوى والتشغيل) من خطة تسويق/.test(x));
+  const cid = await page.evaluate(() => { const c = DB.clients.find(x => x.name === 'دكتور العيلة'); delete c.planDeck333; c.answers.budgetNext = '30000'; return c.id; });
+  let n = net.ai.length; const r1 = await grab(cid);
+  assert.equal(deckCalls(n).length, 2); assert.deepEqual(r1.failed, []);
+  assert.equal((r1.html.match(/<section class="slide/g) || []).length, 23);
+  for (const x of ['الخطة في أربع نقاط', 'الثقة قبل الحجز', 'رحلة العميل', 'conic-gradient', 'فكرة 12', 'فكرة الاثنين', '= 28 قطعة', 'لما العميل يسأل عن السعر', 'أسعار الباقات', 'اطبع / احفظ PDF']) assert.ok(r1.html.includes(x), x);
+  assert.match(r1.html, /22,500/, 'Meta 75% of 30,000');
+  assert.ok(!/مقترح|ناقص<\/b>/.test(r1.html.match(/الخطة في أربع نقاط[\s\S]*?<\/section>/)[0]), 'summary filled');
+  n = net.ai.length; await grab(cid); assert.equal(deckCalls(n).length, 0, 'cached: no AI calls');
+  await page.evaluate(cid => { delete getClient(cid).planDeck333; }, cid);
+  net.mode.deckBDown = true; const r2 = await grab(cid); net.mode.deckBDown = false;
+  assert.ok(r2.failed.includes('b')); assert.match(r2.html, /<b>ناقص<\/b><span>أفكار المحتوى/); assert.ok(r2.html.includes('الثقة قبل الحجز'));
+  n = net.ai.length; const r3 = await grab(cid); const again = deckCalls(n);
+  assert.equal(again.length, 1); assert.match(again[0], /^اكتب جزء المحتوى/); assert.ok(r3.html.includes('فكرة 12'));
+  const ncid = await page.evaluate(() => { const c = JSON.parse(JSON.stringify(DB.clients.find(x => x.name === 'دكتور العيلة'))); c.id = 'np1'; c.name = 'أفضل الصدقة'; c.answers = { businessType: 'مؤسسة خيرية لحفر الآبار', budgetNext: '60000' }; delete c.planDeck333; DB.clients.push(c); return c.id; });
+  n = net.ai.length; const r4 = await grab(ncid);
+  assert.ok(deckCalls(n).every(x => /الجمهور متبرعين/.test(x) && /"المتبرع"/.test(x)));
+  assert.ok(r4.html.includes('خطة التسويق وجمع التبرعات') && r4.html.includes('رحلة المتبرع'));
+  await page.evaluate(() => { DB.clients = DB.clients.filter(x => x.id !== 'np1'); });
+  const side = await page.evaluate(cid => { go('client', cid, 'overview'); return document.getElementById('app').innerHTML.includes(`tt333PlanDeck('${cid}')`); }, cid);
+  assert.ok(side, 'sidebar button');
 });
 
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });

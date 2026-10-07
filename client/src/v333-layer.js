@@ -380,6 +380,171 @@ const shell333=shell;
 const TT333_OPEN=new Set();document.addEventListener('toggle',e=>{const d=e.target;if(d?.tagName!=='DETAILS')return;const k=String(d.querySelector('summary')?.textContent||'').replace(/[\d٠-٩()]/g,'').trim();if(!k)return;d.open?TT333_OPEN.add(k):TT333_OPEN.delete(k);},true);
 function tt333KeepOpen(html){return html.replace(/<details([^>]*)><summary>([^<]*)/g,(m,attrs,sum)=>TT333_OPEN.has(sum.replace(/[\d٠-٩()]/g,'').trim())&&!/\bopen\b/.test(attrs)?`<details${attrs} open><summary>${sum}`:m);}
 function tt333ReviewButtons(html){return html.replace(/<label class="v-check"><input type="checkbox"([^>]*?)onchange="(bp323Review(?:Finding|Post))\(([^"]*?),this\.checked\)">[^<]*<\/label>/g,(m,attrs,fn,args)=>{if(/\bdisabled\b/.test(attrs))return '<p class="v-help">من غير دليل مباشر — مش محتاجة اعتماد.</p>';const on=/\bchecked\b/.test(attrs);return on?`<button class="btn btn-ghost btn-sm tt333-ok" onclick="${fn}(${args},false)">✓ معتمد — إلغاء</button>`:`<button class="btn btn-primary btn-sm" onclick="${fn}(${args},true)">اعتمد</button>`;});}
-shell=function(content,c){let html=tt333KeepOpen(tt333ReviewButtons(shell333.apply(this,arguments)).replace(/V3\.32/g,'V3.33'));if(c&&html.includes('<nav class="tt-side-scroll">')){const acc=tt333Accounts(c),msg=bp323State(c).message;const box=`<div class="tt333-side"><small>حسابات العميل</small>${acc.length?acc.map(a=>`<a class="v-nav" href="${T(a.url)}" target="_blank" rel="noopener noreferrer">↗ ${E(a.label)}</a>`).join(''):'<p class="v-help">هتظهر بعد قراءة المصادر.</p>'}${msg?`<button class="v-nav" onclick="tt333ShowMessage('${c.id}')">✉ رسالة السيلز</button>`:''}</div>`;html=html.replace('<nav class="tt-side-scroll">',box+'<nav class="tt-side-scroll">');}return html.replace(/>([^<>]*%[0-9a-fA-F]{2}[^<>]*)</g,(m,t)=>'>'+t.replace(/https?:\/\/[^\s<>]+/g,u=>{try{return E(decodeURI(u.replace(/&amp;/g,'&')));}catch{return u;}})+'<');};
+shell=function(content,c){let html=tt333KeepOpen(tt333ReviewButtons(shell333.apply(this,arguments)).replace(/V3\.32/g,'V3.33'));if(c&&html.includes('<nav class="tt-side-scroll">')){const acc=tt333Accounts(c),msg=bp323State(c).message;const box=`<div class="tt333-side"><small>حسابات العميل</small>${acc.length?acc.map(a=>`<a class="v-nav" href="${T(a.url)}" target="_blank" rel="noopener noreferrer">↗ ${E(a.label)}</a>`).join(''):'<p class="v-help">هتظهر بعد قراءة المصادر.</p>'}${msg?`<button class="v-nav" onclick="tt333ShowMessage('${c.id}')">✉ رسالة السيلز</button>`:''}<button class="v-nav" ${V.jobs.has(jobKey(c.id,'deck333'))?'disabled':''} onclick="tt333PlanDeck('${c.id}')">${V.jobs.has(jobKey(c.id,'deck333'))?'⏳ بيتجهز تقرير الخطة…':'▦ تقرير خطة التسويق'}</button></div>`;html=html.replace('<nav class="tt-side-scroll">',box+'<nav class="tt-side-scroll">');}return html.replace(/>([^<>]*%[0-9a-fA-F]{2}[^<>]*)</g,(m,t)=>'>'+t.replace(/https?:\/\/[^\s<>]+/g,u=>{try{return E(decodeURI(u.replace(/&amp;/g,'&')));}catch{return u;}})+'<');};
+// ---- Marketing-plan report (slide deck) for any business type ----
+// Facts come from the client file; the narrative and creative parts come from two AI calls that are
+// cached by the input fingerprint, so downloading again costs nothing until the client data changes.
+// A part that fails is shown as missing and only that part is requested on the next click.
+function tt333DeckNum(v){const m=String(v??'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/,/g,'').match(/\d+(?:\.\d+)?/);return m?Number(m[0]):0;}
+function tt333DeckKind(c){const a=c.answers||{},t=[a.businessType,a.description,c.business,c.name].join(' ');return /خير|جمعي|تبرع|صدق|زكا|وقف|إغاث|اغاث|كفال|nonprofit|charity|donat/i.test(t)||a.avgDonation?'nonprofit':'business';}
+function tt333DeckInput(c){const a=c.answers||{},s=bp323State(c),r=s.report,p=currentPlan(c),txt=(v,n=300)=>String(Array.isArray(v)?v.join('، '):v??'').replace(/\s+/g,' ').trim().slice(0,n);
+ const answers=Object.entries(a).filter(([k,v])=>txt(v)&&!/^(bizLinks)$/.test(k)).map(([k,v])=>[auditLabel(k),txt(v)]);
+ const findings=toArr(r?.findings).filter(f=>f&&f.observation).slice(0,12).map(f=>({section:txt(f.section,40),observation:txt(f.observation,240),action:txt(f.action,200)}));
+ const competitors=toArr(c.research?.competitors).slice(0,6).map(x=>({name:txt(x.name,80),notes:toArr(x.findings).slice(0,3).map(f=>txt(f.text,200))}));
+ const angles=toArr(c.creativeStrategy?.angles).slice(0,6).map(x=>({title:txt(x.title||x.name||x.angle,80),message:txt(x.message||x.hook,200)}));
+ const mix=bp323Mix(s.posts.map(x=>({...x,reviewed:true}))),current=mix.total?mix.categories.filter(x=>x.count).map(x=>({name:x.name,pct:Math.round(x.pct)})):[];
+ const plan=p?{budget:tt333DeckNum(p.budget),currency:p.currency||'EGP',days:tt333DeckNum(p.days),platforms:toArr(p.platforms).map(x=>({name:txt(x.name,40),amount:tt333DeckNum(x.amount),reason:txt(x.reason,160)}))}:null;
+ const missing=[...new Set(auditMissing(c).map(k=>auditLabel(k)))];
+ return {name:c.name,kind:tt333DeckKind(c),answers,positioning:r?{current:txt(r.positioning?.current,500),proposal:txt(r.positioning?.proposal,500)}:null,findings,competitors,angles,plan,currentMix:current,postsRead:mix.total,missing};}
+function tt333DeckWords(kind){return kind==='nonprofit'?{person:'المتبرع',people:'المتبرعين',act:'التبرع',acts:'التبرعات',title:'خطة التسويق وجمع التبرعات'}:{person:'العميل',people:'العملاء',act:'الشراء أو الحجز',acts:'المبيعات/الحجوزات',title:'خطة التسويق'};}
+const TT333_DECK_RULES=`قواعد ملزمة:
+- اكتب بالعربي الواضح المختصر (كل نص ≤ 25 كلمة) وبلغة تناسب نوع النشاط.
+- أي رقم أو سعر أو اسم منافس أو حقيقة عن النشاط لازم يكون موجود في البيانات. ممنوع تخترع أسعار منافسين أو إحصائيات أو تقييمات أو أعداد متابعين.
+- المقترحات (عروض، أفكار، نصوص إعلانات) مسموحة لكن اكتب جنبها "مقترح" لو مش من البيانات.
+- لو معلومة مهمة ناقصة حطها في missing بدل ما تخمنها.
+- الرد JSON فقط بالشكل المطلوب بدون أي نص قبله أو بعده.`;
+function tt333DeckPromptA(d,w){return `اكتب الجزء الاستراتيجي من خطة تسويق لنشاط "${d.name}" (${d.kind==='nonprofit'?'جهة غير ربحية — الجمهور متبرعين':'نشاط تجاري — الجمهور عملاء'}). استخدم كلمة "${w.person}" للجمهور.
+${TT333_DECK_RULES}
+بيانات العميل:
+${JSON.stringify(d)}
+الشكل المطلوب:
+{"summary":[{"title":"صورتنا","text":""},{"title":"${d.kind==='nonprofit'?'المشروع البطل':'المنتج البطل'}","text":""},{"title":"التنفيذ","text":""},{"title":"الاستمرار","text":""}],
+"assets":[{"title":"","text":""}] (4 نقاط قوة يملكها النشاط اليوم من البيانات),
+"bigIdea":{"statement":"جملة واحدة قوية","support":"سطر يشرحها"},
+"market":{"note":"أين يقف النشاط بين المنافسين","competitors":[{"name":"","price":"السعر لو مذكور في البيانات فقط وإلا فاضي","note":""}],"source":"مصدر الأسعار"},
+"personas":[{"name":"","who":"","need":"","offer":""}] (4),
+"ladder":[{"name":"","price":"","note":""}] (3-6 مستويات من الأقل للأعلى؛ الأسعار من البيانات وإلا "يحدده العميل"),
+"hero":{"name":"","why":["","","",""]},
+"journey":[{"step":"","text":""}] (5 خطوات من أول ما يشوف الإعلان لحد ما يرجع تاني),
+"budgetSplit":[{"platform":"","pct":0,"why":""}] (مجموع النسب 100),
+"targets":[{"label":"","value":"","note":"تقديري"}] (3 أهداف قابلة للقياس مرتبطة بالميزانية والمدة),
+"requirements":[""] (المطلوب من العميل),
+"first30":[{"day":"اليوم 1-3","task":"","owner":"الفريق أو العميل"}] (6-8 صفوف),
+"nextPhases":[{"name":"","period":"","goal":""}] (4 مراحل),
+"missing":[""]}`;}
+function tt333DeckPromptB(d,w){return `اكتب جزء المحتوى والتشغيل من خطة تسويق لنشاط "${d.name}" (${d.kind==='nonprofit'?'جهة غير ربحية — الجمهور متبرعين':'نشاط تجاري — الجمهور عملاء'}). استخدم كلمة "${w.person}" للجمهور.
+${TT333_DECK_RULES}
+بيانات العميل:
+${JSON.stringify(d)}
+الشكل المطلوب:
+{"postsPerMonth":20,
+"contentAxes":[{"axis":"","pct":0,"example":""}] (4-6 محاور مجموعها 100؛ استفد من currentMix لو موجود),
+"ideas":[{"title":"","format":"ريل/صورة/كاروسيل/ستوري","axis":""}] (12 فكرة),
+"examples":[{"title":"","hook":"أول جملة","body":"","format":""}] (3),
+"ads":[{"name":"","primaryText":"","headline":"","cta":"","visual":"وصف الصورة/الفيديو"}] (3 إعلانات نبدأ بها),
+"calendar":[{"week":"الأسبوع 1","days":[{"day":"السبت","idea":""}]}] (4 أسابيع × 5 أيام نشر),
+"production":{"title":"يوم تصوير واحد","output":[{"type":"","count":0}],"plan":[""]},
+"management":{"daily":[""],"weekly":[""],"monthly":[""],"roles":[{"role":"","task":""}]},
+"replies":[{"trigger":"لما ${w.person} يسأل عن…","text":""}] (4 ردود واتساب جاهزة),
+"kpis":[{"name":"","why":""}] (5 أرقام للتقرير الأسبوعي),
+"afterSale":[""] (اللي نعمله بعد كل ${w.act}),
+"missing":[""]}`;}
+function tt333DeckOK(x,keys){return x&&!x.raw&&typeof x==='object'&&keys.some(k=>x[k]&&(Array.isArray(x[k])?x[k].length:true));}
+window.tt333PlanDeck=async function(cid,force){const c=getClient(cid);if(!c)return;const key=jobKey(cid,'deck333');if(V.jobs.has(key))return toast('تقرير الخطة بيتجهز…');
+ const d=tt333DeckInput(c),w=tt333DeckWords(d.kind);if(!d.answers.length&&!d.findings.length)return toast('ابدأ الدراسة أو جاوب أسئلة العميل الأول — التقرير بيتبني على بياناته.');
+ const fp=bp329Hash(JSON.stringify(d));let st=c.planDeck333&&typeof c.planDeck333==='object'?c.planDeck333:null;
+ if(st&&st.fp!==fp&&(st.a||st.b)&&(force||confirm('بيانات العميل اتغيرت من آخر تقرير. أحدّث محتوى التقرير؟ (بيستخدم رصيد AI — إلغاء = نزّل النسخة اللي فاتت)')))st=null;
+ if(!st)st={fp,a:null,b:null};c.planDeck333=st;
+ const need=[['a',tt333DeckPromptA,['summary','personas','first30'],6000],['b',tt333DeckPromptB,['ideas','calendar','ads'],7000]].filter(x=>!st[x[0]]);
+ const failed=[];st.err='';
+ if(need.length)await withJob(cid,'deck333',async(signal,status)=>{for(const [k,prompt,keys,max] of need){status(k==='a'?'تقرير الخطة: الاستراتيجية…':'تقرير الخطة: المحتوى والتشغيل…');try{const r=await callAI(prompt(d,w),{json:true,maxTokens:max,signal});if(signal.aborted)return;if(tt333DeckOK(r,keys)){st[k]=r;st.at=Date.now();persist();}else failed.push(k);}catch(e){if(signal.aborted)return;failed.push(k);st.err=String(e.message||e).slice(0,160);}}});
+ if(V.errors[key])failed.push('job');
+ const html=tt333DeckHTML(c,d,w,st);const a=document.createElement('a'),url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));a.href=url;a.download='خطة_التسويق_'+String(c.name||'عميل').replace(/[\\/:*?"<>|\s]+/g,'_')+'.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+ toast(failed.length?'نزل التقرير، بس جزء منه ما اتولدش ('+(st.err||'رد غير مكتمل')+'). دوس تاني يكمّل الناقص بس.':'نزل تقرير الخطة — افتحه واطبعه PDF من المتصفح.');return {failed};};
+function tt333DeckHTML(c,d,w,st){const A=st.a||{},B=st.b||{},L=v=>toArr(v).filter(x=>x!=null&&x!==''),t=(v,n=220)=>E(String(v??'').slice(0,n)),fmtN=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
+ const brand=E(c.name||''),months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'],now=new Date(),when=months[now.getMonth()]+' '+now.getFullYear();
+ const miss=(what)=>`<div class="miss"><b>ناقص</b><span>${E(what)}</span></div>`;
+ const head=(n,kicker,title)=>`<div class="kick"><span>${String(n).padStart(2,'0')}</span>${E(kicker)}</div><h2>${title}</h2>`;
+ let n=0;const slide=(kicker,title,body,cls='')=>{n++;return `<section class="slide ${cls}">${head(n,kicker,title)}<div class="body">${body}</div><footer><span>${brand}، ${E(w.title)}</span><span>${n}</span></footer></section>`;};
+ const cards=(list,f,cols=4)=>`<div class="grid g${cols}">${list.map(f).join('')}</div>`;
+ const out=[];
+ // 1 cover
+ n++;out.push(`<section class="slide cover"><div class="cv"><small>${E(when)}</small><h1>${brand}</h1><p>${E(w.title)}</p><div class="bar"></div><small>إعداد: Techno Team</small></div></section>`);
+ // 2 summary
+ out.push(slide('الخلاصة','الخطة في أربع نقاط',L(A.summary).length?cards(L(A.summary).slice(0,4),(x,i)=>`<div class="card num"><i>${i+1}</i><h3>${t(x.title,60)}</h3><p>${t(x.text)}</p></div>`):miss('الخلاصة بتتولد مع الجزء الاستراتيجي — دوس على الزرار تاني.')));
+ // 3 starting point
+ out.push(slide('نقطة البداية','ما يملكه النشاط اليوم',L(A.assets).length?cards(L(A.assets).slice(0,4),x=>`<div class="card"><h3>${t(x.title,60)}</h3><p>${t(x.text)}</p></div>`):miss('نقاط القوة الحالية')));
+ // 4 big idea
+ out.push(slide('الفكرة الأساسية','الرسالة اللي هنبني عليها كل حاجة',A.bigIdea?.statement?`<div class="big"><blockquote>${t(A.bigIdea.statement,200)}</blockquote><p>${t(A.bigIdea.support)}</p></div>`:miss('الفكرة الأساسية')));
+ // 5 market
+ const comps=L(A.market?.competitors).filter(x=>x&&x.name).slice(0,7),priced=comps.map(x=>({...x,v:tt333DeckNum(x.price)})).filter(x=>x.v>0),maxV=Math.max(1,...priced.map(x=>x.v));
+ const compList=comps.length?comps:d.competitors.map(x=>({name:x.name,note:x.notes[0]||''}));
+ out.push(slide('السوق','أين نقف بين المنافسين',compList.length?`${A.market?.note?`<p class="lead">${t(A.market.note,300)}</p>`:''}${priced.length>=2?`<div class="bars">${priced.map(x=>`<div class="br${x.name===c.name?' me':''}"><span>${t(x.name,40)}</span><div><b style="width:${Math.round(100*x.v/maxV)}%"></b></div><em>${t(x.price,30)}</em></div>`).join('')}</div>`:''}<div class="table"><table><tr><th>المنافس</th><th>السعر</th><th>ملاحظة</th></tr>${compList.map(x=>`<tr><td>${t(x.name,60)}</td><td>${t(x.price||'غير معروف',30)}</td><td>${t(x.note,160)}</td></tr>`).join('')}</table></div><small class="src">المصدر: ${t(A.market?.source||'دراسة المنافسين في ملف العميل',120)} — الأسعار المكتوبة "غير معروف" محتاجة رصد يدوي.</small>`:miss('دراسة المنافسين (أسماء وأسعار) — شغّل دراسة المنافسين أو ضيفهم يدويًا.')));
+ // 6 audience
+ out.push(slide('الجمهور','لمن نتحدث',L(A.personas).length?cards(L(A.personas).slice(0,4),x=>`<div class="card"><h3>${t(x.name,50)}</h3><p>${t(x.who)}</p><p class="mut">${t(x.need)}</p>${x.offer?`<span class="tag">${t(x.offer,70)}</span>`:''}</div>`):miss('شرائح الجمهور')));
+ // 7 ladder
+ const lad=L(A.ladder).slice(0,6);out.push(slide('ما نقدمه',d.kind==='nonprofit'?'سلّم التبرع من الأصغر للأكبر':'سلّم الأسعار من الأصغر للأكبر',lad.length?`<div class="ladder">${lad.map((x,i)=>`<div class="step" style="height:${40+Math.round(55*(i+1)/lad.length)}%"><b>${t(x.price,30)}</b><h3>${t(x.name,50)}</h3><p>${t(x.note,90)}</p></div>`).join('')}</div>`:miss('قائمة المنتجات/الباقات وأسعارها')));
+ // 8 hero
+ out.push(slide(d.kind==='nonprofit'?'المشروع البطل':'المنتج البطل',A.hero?.name?t(A.hero.name,80):'المنتج اللي هنقود بيه',A.hero?.name?cards(L(A.hero.why).slice(0,4),(x,i)=>`<div class="card num"><i>${i+1}</i><p>${t(x)}</p></div>`):miss('المنتج/المشروع البطل')));
+ // 9 journey
+ out.push(slide('الرحلة','رحلة '+w.person,L(A.journey).length?`<div class="flow">${L(A.journey).slice(0,6).map((x,i)=>`<div class="fs"><i>${i+1}</i><h3>${t(x.step,40)}</h3><p>${t(x.text,140)}</p></div>`).join('<span class="arr">←</span>')}</div>`:miss('رحلة '+w.person)));
+ // 10 platforms & budget (numbers from the approved plan, otherwise from the answers)
+ const plan=d.plan,total=plan?.budget||tt333DeckNum(c.answers?.testBudget)||tt333DeckNum(c.answers?.budgetNext),days=plan?.days||30,cur=({EGP:'جنيه',SAR:'ريال',AED:'درهم',USD:'دولار'})[plan?.currency||'EGP']||plan.currency;
+ let split=plan&&plan.platforms.some(x=>x.amount)?plan.platforms.filter(x=>x.amount).map(x=>({platform:x.name,amount:x.amount,pct:total?100*x.amount/total:0,why:x.reason})):L(A.budgetSplit).filter(x=>x&&x.platform&&tt333DeckNum(x.pct)>0).map(x=>({platform:x.platform,pct:tt333DeckNum(x.pct),why:x.why}));
+ const sum=split.reduce((s,x)=>s+x.pct,0)||1;split=split.map(x=>({...x,pct:100*x.pct/sum,amount:x.amount||(total?total*x.pct/sum:0)}));
+ const colors=['#0f4c5c','#e3a33b','#5b9aa0','#9c6644','#7a8b99','#c9d6df'];let acc=0;const cone=split.map((x,i)=>{const s0=acc;acc+=x.pct;return `${colors[i%6]} ${s0}% ${acc}%`;}).join(',');
+ out.push(slide('المنصات والميزانية',total?`${fmtN(total)} ${E(cur)} على ${fmtN(days)} يوم`:'الميزانية',split.length?`<div class="budget"><div class="donut" style="background:conic-gradient(${cone})"><div><b>${total?fmtN(total):'—'}</b><small>${E(cur)}</small></div></div><div><table><tr><th>المنصة</th><th>النسبة</th><th>المبلغ</th><th>اليومي</th></tr>${split.map((x,i)=>`<tr><td><span class="dot" style="background:${colors[i%6]}"></span>${t(x.platform,30)}</td><td>${Math.round(x.pct)}%</td><td>${total?fmtN(x.amount):'—'}</td><td>${total?fmtN(x.amount/days):'—'}</td></tr>`).join('')}</table>${split.map(x=>x.why?`<p class="mut">• <b>${t(x.platform,30)}:</b> ${t(x.why,150)}</p>`:'').join('')}${total?`<div class="alts"><div><small>بديل أقل</small><b>${fmtN(total/2)} ${E(cur)}</b><small>${fmtN(total/2/days)} يوميًا</small></div><div><small>المقترح</small><b>${fmtN(total)} ${E(cur)}</b><small>${fmtN(total/days)} يوميًا</small></div><div><small>بديل أعلى</small><b>${fmtN(total*2)} ${E(cur)}</b><small>${fmtN(total*2/days)} يوميًا</small></div></div>`:miss('الميزانية الشهرية — اكتبها في أسئلة العميل أو اعتمد خطة.')}</div></div>${plan?'':'<small class="src">التقسيم مقترح لحد ما الخطة تتعتمد من مرحلة الخطة.</small>'}`:miss('تقسيم الميزانية على المنصات')));
+ // 11 content axes
+ const axes=L(B.contentAxes).filter(x=>x&&x.axis).slice(0,6);
+ out.push(slide('المحتوى','ماذا ننشر وبأي نسبة',axes.length?`<p class="lead">${fmtN(B.postsPerMonth||20)} منشور في الشهر تقريبًا</p><div class="table"><table><tr><th>المحور</th><th>النسبة</th><th>مثال</th></tr>${axes.map(x=>`<tr><td><b>${t(x.axis,50)}</b></td><td><div class="pbar"><b style="width:${Math.min(100,tt333DeckNum(x.pct))}%"></b><span>${Math.round(tt333DeckNum(x.pct))}%</span></div></td><td>${t(x.example,160)}</td></tr>`).join('')}</table></div>${d.currentMix.length?`<small class="src">المحتوى الحالي (${d.postsRead} منشور): ${d.currentMix.map(x=>E(x.name)+' '+x.pct+'%').join(' · ')}</small>`:''}`:miss('محاور المحتوى ونسبها')));
+ // 12 ideas
+ out.push(slide('أفكار','12 فكرة جاهزة',L(B.ideas).length?`<div class="grid g4 small">${L(B.ideas).slice(0,12).map((x,i)=>`<div class="card"><i class="n">${i+1}</i><h3>${t(x.title,90)}</h3><span class="tag">${t(x.format,20)}</span> <span class="tag alt">${t(x.axis,30)}</span></div>`).join('')}</div>`:miss('أفكار المحتوى')));
+ // 13 examples
+ out.push(slide('شكل المحتوى','أمثلة مكتوبة',L(B.examples).length?cards(L(B.examples).slice(0,3),x=>`<div class="card"><span class="tag">${t(x.format,20)}</span><h3>${t(x.title,60)}</h3><p><b>${t(x.hook,140)}</b></p><p class="mut">${t(x.body,320)}</p></div>`,3):miss('أمثلة المحتوى')));
+ // 14 ads
+ out.push(slide('الإعلانات','ثلاثة إعلانات نبدأ بها',L(B.ads).length?cards(L(B.ads).slice(0,3),x=>`<div class="ad"><div class="adh"><i>${brand.slice(0,1)}</i><div><b>${brand}</b><small>ممول</small></div></div><p>${t(x.primaryText,260)}</p><div class="vis">${t(x.visual,140)}</div><div class="adf"><b>${t(x.headline,70)}</b><span>${t(x.cta,24)}</span></div><small class="mut">${t(x.name,50)}</small></div>`,3):miss('نصوص الإعلانات')));
+ // 15 calendar
+ const cal=L(B.calendar).slice(0,5),dayNames=[...new Set(cal.flatMap(wk=>L(wk.days).map(x=>String(x.day||''))))].filter(Boolean).slice(0,7);
+ out.push(slide('التقويم','تقويم محتوى الشهر الأول',cal.length&&dayNames.length?`<div class="table cal"><table><tr><th></th>${dayNames.map(x=>`<th>${E(x)}</th>`).join('')}</tr>${cal.map(wk=>`<tr><th>${t(wk.week,20)}</th>${dayNames.map(dn=>{const it=L(wk.days).find(x=>String(x.day)===dn);return `<td>${it?t(it.idea,80):''}</td>`;}).join('')}</tr>`).join('')}</table></div>`:miss('تقويم المحتوى')));
+ // 16 production
+ const prod=B.production||{},outp=L(prod.output).filter(x=>x&&x.type),pieces=outp.reduce((s,x)=>s+tt333DeckNum(x.count),0);
+ out.push(slide('الإنتاج',pieces?`${t(prod.title||'يوم تصوير',40)} = ${fmtN(pieces)} قطعة`:'خطة الإنتاج',outp.length?`<div class="grid g${Math.min(4,outp.length)}">${outp.slice(0,8).map(x=>`<div class="card stat"><b>${fmtN(tt333DeckNum(x.count))}</b><p>${t(x.type,50)}</p></div>`).join('')}</div>${L(prod.plan).length?`<ul>${L(prod.plan).slice(0,6).map(x=>`<li>${t(x,160)}</li>`).join('')}</ul>`:''}`:miss('خطة الإنتاج')));
+ // 17 management
+ const mg=B.management||{};
+ out.push(slide('الإدارة','كيف تُدار الحملة',L(mg.daily).length||L(mg.weekly).length?`<div class="grid g3">${[['يوميًا',mg.daily],['أسبوعيًا',mg.weekly],['شهريًا',mg.monthly]].map(([h,l])=>`<div class="card"><h3>${h}</h3><ul>${L(l).slice(0,5).map(x=>`<li>${t(x,120)}</li>`).join('')}</ul></div>`).join('')}</div>${L(mg.roles).length?`<div class="roles">${L(mg.roles).slice(0,5).map(x=>`<div><b>${t(x.role,40)}</b><span>${t(x.task,120)}</span></div>`).join('')}</div>`:''}`:miss('طريقة إدارة الحملة')));
+ // 18 replies
+ out.push(slide('الردود','ردود واتساب الجاهزة',L(B.replies).length?cards(L(B.replies).slice(0,4),x=>`<div class="card wa"><small>${t(x.trigger,90)}</small><p>${t(x.text,360)}</p></div>`,2):miss('الردود الجاهزة')));
+ // 19 weekly report
+ out.push(slide('المتابعة','التقرير الأسبوعي: خمسة أرقام',L(B.kpis).length?`${cards(L(B.kpis).slice(0,5),(x,i)=>`<div class="card num"><i>${i+1}</i><h3>${t(x.name,50)}</h3><p class="mut">${t(x.why,120)}</p></div>`,5)}${L(B.afterSale).length?`<div class="card"><h3>بعد كل ${E(w.act)}</h3><ul>${L(B.afterSale).slice(0,5).map(x=>`<li>${t(x,140)}</li>`).join('')}</ul></div>`:''}`:miss('مؤشرات التقرير الأسبوعي')));
+ // 20 targets
+ out.push(slide('الأهداف','النتائج المستهدفة',L(A.targets).length?cards(L(A.targets).slice(0,3),x=>`<div class="card stat"><b>${t(x.value,30)}</b><h3>${t(x.label,60)}</h3><small class="mut">${t(x.note||'تقديري',80)}</small></div>`,3)+'<small class="src">أرقام تقديرية للمتابعة؛ بتتعدل بعد أول أسبوعين من النتائج الفعلية.</small>':miss('الأهداف الرقمية')));
+ // 21 requirements + missing data
+ const missAll=[...new Set([...[...L(A.missing),...L(B.missing)].slice(0,5),...d.missing].map(String))].slice(0,12);
+ out.push(slide('المطلوب','المطلوب من '+(d.kind==='nonprofit'?'المؤسسة':'العميل'),`<div class="grid g2"><div class="card"><h3>قبل البداية</h3><ul>${L(A.requirements).slice(0,8).map(x=>`<li>${t(x,150)}</li>`).join('')||'<li>—</li>'}</ul></div><div class="card warn"><h3>معلومات لسه ناقصة</h3><ul>${missAll.map(x=>`<li>${t(x,150)}</li>`).join('')||'<li>مفيش — البيانات الأساسية كاملة.</li>'}</ul></div></div>`));
+ // 22 first 30 days
+ out.push(slide('أول 30 يوم','الجدول الزمني',L(A.first30).length?`<div class="table"><table><tr><th>التوقيت</th><th>المهمة</th><th>المسؤول</th></tr>${L(A.first30).slice(0,10).map(x=>`<tr><td><b>${t(x.day,30)}</b></td><td>${t(x.task,160)}</td><td>${t(x.owner,30)}</td></tr>`).join('')}</table></div>`:miss('جدول أول 30 يوم')));
+ // 23 next
+ out.push(slide('الخطوة التالية','المراحل الجاية',L(A.nextPhases).length?`<div class="flow">${L(A.nextPhases).slice(0,4).map((x,i)=>`<div class="fs"><i>${i+1}</i><h3>${t(x.name,50)}</h3><small>${t(x.period,40)}</small><p>${t(x.goal,140)}</p></div>`).join('<span class="arr">←</span>')}</div>`:miss('المراحل التالية')));
+ const fontCSS=[...document.querySelectorAll('style')].flatMap(e=>e.textContent.match(/@font-face\s*\{[^}]+\}/g)||[]).join('\n');
+ return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${brand} — ${E(w.title)}</title><style>${fontCSS}
+:root{--teal:#0f4c5c;--teal2:#16697a;--amber:#e3a33b;--bg:#eef2f5;--ink:#15303a;--mut:#5f7480;--line:#d7e0e6}
+*{box-sizing:border-box}body{margin:0;background:#cfd8de;color:var(--ink);font:18px/1.6 Cairo,Tahoma,Arial,sans-serif}
+.tools{position:sticky;top:0;z-index:5;display:flex;gap:10px;justify-content:center;padding:10px;background:#0f4c5cee}.tools button{border:0;border-radius:8px;padding:9px 18px;background:var(--amber);color:#1b1b1b;font:inherit;font-weight:700;cursor:pointer}
+.deck{width:1280px;margin:0 auto;transform-origin:top center}
+.slide{position:relative;width:1280px;min-height:720px;margin:24px auto;padding:46px 64px 70px;background:var(--bg);border-radius:6px;overflow:hidden;box-shadow:0 6px 24px #0002;display:flex;flex-direction:column}
+.slide:before{content:"";position:absolute;inset:0 0 auto auto;width:10px;height:100%;background:var(--teal)}
+.kick{display:flex;gap:12px;align-items:center;color:var(--teal2);font-weight:700;font-size:17px}.kick span{background:var(--amber);color:#1b1b1b;border-radius:6px;padding:0 9px}
+h2{margin:6px 0 22px;font-size:38px;line-height:1.3;color:var(--teal)}h3{margin:0 0 6px;font-size:20px;color:var(--teal)}p{margin:0 0 8px}ul{margin:0;padding-right:20px}li{margin:4px 0}
+.body{flex:1}.grid{display:grid;gap:18px}.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g5{grid-template-columns:repeat(5,1fr)}
+.card{background:#fff;border-radius:14px;padding:20px;border:1px solid var(--line);position:relative}.card.num i,.card i.n{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--teal);color:#fff;font-style:normal;font-weight:700;margin-bottom:8px}
+.small .card{padding:14px;font-size:15px}.small h3{font-size:16px;color:var(--ink)}.mut{color:var(--mut);font-size:15px}.lead{font-size:21px;color:var(--mut)}
+.tag{display:inline-block;margin-top:8px;background:#fdf1dc;color:#7a4d06;border-radius:20px;padding:2px 12px;font-size:14px;font-weight:700}.tag.alt{background:#e3eff1;color:var(--teal)}
+.big{display:grid;place-items:center;text-align:center;min-height:380px}.big blockquote{margin:0;font-size:48px;line-height:1.45;font-weight:800;color:var(--teal);max-width:1000px}.big blockquote:after{content:"";display:block;width:120px;height:6px;background:var(--amber);margin:22px auto 0;border-radius:3px}.big p{font-size:22px;color:var(--mut)}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}th,td{padding:11px 14px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}th{background:var(--teal);color:#fff;font-weight:700}.cal td{font-size:14px}.cal tr th:first-child{background:#e3eff1;color:var(--teal)}
+.bars{display:grid;gap:10px;margin:8px 0 18px}.br{display:grid;grid-template-columns:220px 1fr 140px;gap:12px;align-items:center}.br div{background:#dde6eb;border-radius:8px;height:22px}.br div b{display:block;height:100%;background:var(--teal2);border-radius:8px}.br em{font-style:normal;font-weight:700}.br.me div b{background:var(--amber)}.br.me span{font-weight:800}
+.src{display:block;margin-top:12px;color:var(--mut);font-size:14px}
+.ladder{display:flex;align-items:flex-end;gap:14px;height:420px}.step{flex:1;background:#fff;border:1px solid var(--line);border-top:8px solid var(--amber);border-radius:12px;padding:16px;display:flex;flex-direction:column;justify-content:flex-start}.step b{font-size:24px;color:var(--teal)}.step p{font-size:14px;color:var(--mut)}
+.flow{display:flex;align-items:stretch;gap:8px}.fs{flex:1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}.fs i{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--amber);font-style:normal;font-weight:800;margin-bottom:8px}.fs p{font-size:15px;color:var(--mut)}.arr{align-self:center;color:var(--teal2);font-size:28px}
+.budget{display:grid;grid-template-columns:330px 1fr;gap:36px;align-items:start}.donut{width:300px;height:300px;border-radius:50%;display:grid;place-items:center}.donut>div{width:170px;height:170px;border-radius:50%;background:var(--bg);display:grid;place-items:center;align-content:center;text-align:center}.donut b{font-size:30px;color:var(--teal)}.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-left:8px}
+.alts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.alts div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}.alts div:nth-child(2){border:2px solid var(--amber)}.alts b{display:block;font-size:22px;color:var(--teal)}.alts small{display:block;color:var(--mut)}
+.pbar{position:relative;background:#e6edf1;border-radius:8px;height:24px;min-width:160px}.pbar b{display:block;height:100%;background:var(--amber);border-radius:8px}.pbar span{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:14px}
+.ad{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}.adh{display:flex;gap:10px;align-items:center;padding:12px 14px}.adh i{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--teal);color:#fff;font-style:normal;font-weight:800}.adh small{display:block;color:var(--mut);font-size:12px}.ad>p{padding:0 14px;font-size:15px}.vis{margin:6px 0;min-height:150px;background:linear-gradient(135deg,#16697a,#0f4c5c);color:#fff;display:grid;place-items:center;text-align:center;padding:16px;font-size:15px}.adf{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;background:#f1f4f6}.adf span{background:var(--teal);color:#fff;border-radius:6px;padding:4px 12px;font-size:14px;white-space:nowrap}.ad>small{padding:8px 14px}
+.stat b{display:block;font-size:40px;color:var(--teal);line-height:1.2}.roles{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.roles div{background:#fff;border-radius:10px;padding:10px 14px;border:1px solid var(--line)}.roles b{color:var(--teal);margin-left:8px}
+.wa{background:#e9f7ef;border-color:#c9ead6}.wa small{display:block;color:#2f7a4c;font-weight:700;margin-bottom:6px}.warn{border-color:#f0d6a8;background:#fffaf0}
+.miss{border:2px dashed #e0b25c;background:#fffaf0;border-radius:14px;padding:26px;display:flex;gap:14px;align-items:center;font-size:20px}.miss b{background:var(--amber);border-radius:6px;padding:2px 12px}
+footer{position:absolute;bottom:18px;right:64px;left:40px;display:flex;justify-content:space-between;color:var(--mut);font-size:14px}
+.cover{background:var(--teal);color:#fff;justify-content:center}.cover:before{background:var(--amber)}.cv h1{font-size:68px;margin:6px 0;line-height:1.25}.cv p{font-size:34px;margin:0;color:#d6e7ea}.cv small{font-size:20px;color:#b9d3d8}.cv .bar{width:160px;height:8px;background:var(--amber);border-radius:4px;margin:26px 0}
+@page{size:1280px 720px;margin:0}@media print{body{background:none}.tools{display:none}.deck{transform:none!important;width:auto}.slide{margin:0;border-radius:0;box-shadow:none;height:720px;min-height:0;break-after:page}}
+</style></head><body><div class="tools"><button onclick="window.print()">اطبع / احفظ PDF</button></div><div class="deck">${out.join('')}</div><script>function fit(){var k=Math.min(1,(innerWidth-16)/1280),d=document.querySelector('.deck');d.style.transform=k<1?'scale('+k+')':'';d.style.marginBottom=k<1?(-(1-k)*d.offsetHeight)+'px':'';}addEventListener('resize',fit);fit();<\/script></body></html>`;}
 document.title='Techno Team — V3.33';
 try{render();}catch(e){console.error('V3.33 render',e);}
