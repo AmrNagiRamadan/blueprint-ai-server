@@ -1,3 +1,5 @@
+import { guard } from './_lib/guard.js';
+
 const endpoint = 'https://api.openai.com/v1/responses';
 const allowedModels = new Set(['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-5', 'gpt-5-mini']);
 
@@ -58,12 +60,8 @@ async function runSearch(key, model, input, maxTokens, toolType, signal) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (guard(req, res)) return;
   res.setHeader('Cache-Control', 'no-store');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const key = process.env.OPENAI_API_KEY;
   if (!key) return res.status(503).json({ error: 'SEARCH_KEY_MISSING' });
@@ -78,7 +76,8 @@ export default async function handler(req, res) {
   const model = allowedModels.has(body.model) ? body.model : 'gpt-4.1';
   const maxTokens = Math.min(5000, Math.max(400, +body.max_output_tokens || 4000));
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90000);
+  // Must finish before Vercel's maxDuration (60s) kills the function.
+  const timer = setTimeout(() => controller.abort(), 55000);
 
   try {
     const attempts = [];

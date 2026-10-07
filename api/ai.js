@@ -8,14 +8,11 @@
 // وبترجّع الرد دايمًا بنفس شكل chat/completions اللي الأداة (Blueprint_OS.html) متوقعاه —
 // يعني مفيش أي تعديل مطلوب في ملف الأداة نفسه.
 
-export default async function handler(req, res) {
-  // CORS — نسمح للأداة تكلّم السيرفر ده
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+import { guard } from './_lib/guard.js';
 
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  if (req.method !== 'POST') { res.status(405).json({ error: 'Use POST' }); return; }
+export default async function handler(req, res) {
+  // CORS + توكن اختياري (BLUEPRINT_TOKEN / ALLOWED_ORIGINS) — شوف api/_lib/guard.js
+  if (guard(req, res)) return;
 
   const API_KEY = process.env.OPENAI_API_KEY;
   if (!API_KEY) { res.status(500).json({ error: 'OPENAI_API_KEY مش متظبط في إعدادات Vercel' }); return; }
