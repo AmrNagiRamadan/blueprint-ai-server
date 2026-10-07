@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const APP = 'file://' + fileURLToPath(new URL('../client/Techno_Team_OS_V3_33.html', import.meta.url));
 const SERVER = 'https://bp.test';
+const QWEN = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions';
 const SITE = 'https://clinic.example/';
 const SITE2 = 'https://clinic-two.example/';
 const FB = 'https://www.facebook.com/smileclinic';
@@ -31,8 +32,9 @@ function fakeNetwork(ctx, net) {
   const ai = text => ({ choices: [{ message: { content: typeof text === 'string' ? text : JSON.stringify(text) } }] });
   return ctx.route(/^https?:\/\//, async route => {
     const req = route.request(), url = req.url();
-    if (url.startsWith(SERVER + '/api/ai')) {
+    if (url.startsWith(SERVER + '/api/ai') || url.startsWith(QWEN)) {
       const body = JSON.parse(req.postData() || '{}'), msg = body.messages?.at(-1)?.content;
+      if (url.startsWith(QWEN)) net.qwen.push({ model: body.model, max: body.max_tokens, json: body.response_format?.type, auth: req.headers()['authorization'], image: Array.isArray(msg) });
       const prompt = Array.isArray(msg) ? msg.find(x => x.type === 'text')?.text || '' : String(msg || '');
       net.ai.push(prompt);
       if (Array.isArray(msg)) return json(route, 200, ai(`${NAME}\nعرض تقويم الأسنان بخصم 20% لحد آخر الشهر\nوصف مرئي: بوست صورة`));
@@ -88,7 +90,7 @@ async function open(profile, net) {
   await page.waitForTimeout(700);
   return { ctx, page };
 }
-const newNet = () => ({ mode: {}, ai: [], search: [], read: [], jina: [], errors: [] });
+const newNet = () => ({ mode: {}, ai: [], search: [], read: [], jina: [], qwen: [], errors: [] });
 const runStudy = (page, cid, reuse = false) => page.evaluate(async ([cid, reuse]) => { go('dashboard'); await bp324RunStudy(cid, reuse); const s = bp323State(getClient(cid)); return { error: V.errors[jobKey(cid, 'digitalAudit')] || '', report: !!s.report, limits: s.report?.limits || [] }; }, [cid, reuse]);
 const configure = page => page.evaluate(server => { localStorage.setItem('blueprint_ai_endpoint', server + '/api/ai'); localStorage.setItem('blueprint_ai_model', 'gpt-4.1-mini'); }, SERVER);
 
@@ -284,6 +286,23 @@ await check('credit: no client ad-library searches unless asked; tracking HTML a
 await check('posts: relative times get approximate dates for extraction', async () => {
   const p = net.ai.find(x => /^استخرج معلومات صريحة/.test(x) && x.includes(DR_FB));
   assert.match(p, /6 minutes ago \[≈\d{4}-\d{2}-\d{2}\]/);
+});
+
+await check('switching AI to Qwen keeps the server reader; Qwen gets JSON mode, ≤8192 tokens and a vision model for screenshots', async () => {
+  await page.evaluate(() => { localStorage.setItem('blueprint_ai_endpoint', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'); localStorage.setItem('blueprint_ai_key', 'sk-test-qwen'); localStorage.setItem('blueprint_ai_model', 'qwen-plus'); });
+  const cq = await page.evaluate(() => { const c = { id: uid(), name: 'عميل كوين', biz: 'أسنان', createdAt: Date.now(), answers: { biz: 'أسنان' }, preAudit: { type: 'new' } }; DB.clients.unshift(c); const s = bp323State(c); s.sourceURL = 'https://clinic.example/qwen'; s.message = 'العميل مش بيعمل فيديوهات خالص'; persist(); return c.id; });
+  const before = { read: net.read.length, qwen: net.qwen.length };
+  const r = await runStudy(page, cq);
+  assert.equal(r.error, '', r.error);
+  const q = net.qwen.slice(before.qwen);
+  assert.ok(q.length > 0, 'calls went to Qwen');
+  assert.ok(q.every(x => x.model === 'qwen-plus' && x.max <= 8192 && x.auth === 'Bearer sk-test-qwen'), JSON.stringify(q.slice(0, 3)));
+  assert.ok(q.some(x => x.json === 'json_object'), 'JSON mode on');
+  assert.ok(net.read.slice(before.read).some(u => u.startsWith('https://clinic.example/qwen')), 'server reader still used');
+  const n = net.qwen.length;
+  await page.evaluate(() => callAI('انسخ النص', { image: 'data:image/png;base64,iVBORw0KGgo=', maxTokens: 50 }));
+  assert.equal(net.qwen[n].model, 'qwen-vl-max');
+  await page.evaluate(server => { localStorage.setItem('blueprint_ai_endpoint', server + '/api/ai'); localStorage.removeItem('blueprint_ai_key'); localStorage.setItem('blueprint_ai_model', 'gpt-4.1-mini'); }, SERVER);
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
