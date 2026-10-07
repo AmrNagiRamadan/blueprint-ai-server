@@ -15,7 +15,9 @@ Vercel serverless functions used by the Techno Team / Blueprint OS app (`client/
 | `OPENAI_API_KEY` | yes | Used by `/api/ai` and `/api/search`. |
 | `BLUEPRINT_TOKEN` + `READER_API_TOKEN` | recommended | Give both the same value and put it in the app: «الاتصال والبحث» → «رمز وصول سيرفر Blueprint». `/api/ai` and `/api/search` then require `X-Blueprint-Token`, `/api/read` requires `Authorization: Bearer`. Without them anyone with the URL can use your OpenAI key and the reader. |
 | `ALLOWED_ORIGINS` | optional | Comma-separated CORS origins. Use `null` for the HTML file opened from disk, e.g. `null,https://my-app.example`. |
-| `OPENAI_MODEL`, `OPENAI_SEARCH_MODEL` | optional | Model overrides for `/api/ai`. |
+| `OPENAI_MODEL`, `OPENAI_SEARCH_MODEL` | optional | Model overrides. Default is `gpt-4.1-mini` for chat and search (cheapest setup that keeps Arabic JSON reliable). |
+| `OPENAI_ALLOW_ANY_MODEL` | optional | `1` lets the app request any model. Without it, only `gpt-4.1-mini`, `gpt-4.1-nano` and `gpt-4o-mini` are accepted; other requests fall back to `OPENAI_MODEL`. |
+| `OPENAI_SEARCH_CONTEXT` | optional | Web-search context size: `low` (default, cheapest), `medium` or `high`. |
 
 `/api/read` uses `@sparticuz/chromium` + `playwright-core`. Private/internal addresses are blocked, including redirects and sub-requests.
 

@@ -161,7 +161,7 @@ await check('a page that could not be read shows as failed (with the reason), no
 await check('study started while another screen is open still sends this client\'s data to the diagnosis', async () => {
   // bp329Evaluate used the client open on screen; from the dashboard the prompt had no evidence and no answers.
   const before = net.ai.length;
-  await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; STATE.clientId = null; go('dashboard'); }, cid);
+  await page.evaluate(cid => { const s = bp323State(getClient(cid)); delete s.evaluation329; delete s.aiCache333; STATE.clientId = null; go('dashboard'); }, cid);
   const r = await page.evaluate(cid => bp324RunStudy(cid, true).then(() => V.errors[jobKey(cid, 'digitalAudit')] || ''), cid);
   assert.equal(r, '', r);
   const p = net.ai.slice(before).find(x => /^أنت مدقق تسويق رقمي/.test(x));
@@ -479,6 +479,24 @@ await check('marketing-plan report: 23 slides, cached, failed part retried alone
   await page.evaluate(() => { DB.clients = DB.clients.filter(x => x.id !== 'np1'); });
   const side = await page.evaluate(cid => { go('client', cid, 'overview'); return document.getElementById('app').innerHTML.includes(`tt333PlanDeck('${cid}')`); }, cid);
   assert.ok(side, 'sidebar button');
+});
+
+await check('credit: rerun with the same data reuses the diagnosis and searches; changed answers or «حدّث كل المصادر» ask again', async () => {
+  const cid = await page.evaluate(() => DB.clients.find(x => x.name === 'عميل أ').id);
+  const evals = from => net.ai.slice(from).filter(x => /^أنت مدقق تسويق رقمي/.test(x)).length;
+  await page.evaluate(cid => { const s = bp323State(getClient(cid)); delete s.evaluation329; }, cid);
+  await runStudy(page, cid, true);
+  let n = net.ai.length, ns = net.search.length;
+  await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; }, cid);
+  const r1 = await runStudy(page, cid, true); assert.equal(r1.error, ''); assert.ok(r1.report);
+  assert.equal(evals(n), 0, 'same input → saved diagnosis answer'); assert.equal(net.search.length, ns, 'no repeated search');
+  // survives a reload (stored with the client, not only in memory)
+  ({ ctx, page } = await (async () => { await ctx.close(); return open(profile, net); })()); await configure(page);
+  n = net.ai.length; await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; }, cid);
+  await runStudy(page, cid, true); assert.equal(evals(n), 0, 'still saved after reload');
+  n = net.ai.length; await page.evaluate(cid => { const c = getClient(cid); c.answers.offer = 'خصم 15% على أول كشف'; delete bp323State(c).evaluation329; }, cid);
+  await runStudy(page, cid, true); assert.ok(evals(n) > 0, 'changed answers → new diagnosis');
+  n = net.ai.length; await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; return tt333RefreshAll(cid); }, cid); assert.ok(evals(n) > 0, 'refresh all asks again');
 });
 
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });

@@ -10,6 +10,14 @@
 
 import { guard } from './_lib/guard.js';
 
+// Credit: only the cheap models can be picked from the app; anything else (gpt-4o, gpt-4.1, gpt-5, o-series)
+// falls back to OPENAI_MODEL. Set OPENAI_ALLOW_ANY_MODEL=1 to allow the app to choose freely.
+export const CHEAP_MODELS = ['gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o-mini'];
+export function chatModel(requested, fallback, env = process.env) {
+  if (requested && env.OPENAI_ALLOW_ANY_MODEL === '1' && /^(gpt|o[134])/i.test(requested)) return requested;
+  return CHEAP_MODELS.includes(requested) ? requested : fallback;
+}
+
 export default async function handler(req, res) {
   // CORS + توكن اختياري (BLUEPRINT_TOKEN / ALLOWED_ORIGINS) — شوف api/_lib/guard.js
   if (guard(req, res)) return;
@@ -19,8 +27,8 @@ export default async function handler(req, res) {
 
   // الموديلات الافتراضية — تقدر تغيّرهم من غير ما تلمس الكود عن طريق Environment Variables اختيارية:
   // OPENAI_MODEL (للمكالمات العادية) و OPENAI_SEARCH_MODEL (لما البحث الحي مفعّل)
-  const NORMAL_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  const SEARCH_MODEL = process.env.OPENAI_SEARCH_MODEL || 'gpt-4o';
+  const NORMAL_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const SEARCH_MODEL = process.env.OPENAI_SEARCH_MODEL || 'gpt-4.1-mini';
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
@@ -35,7 +43,7 @@ export default async function handler(req, res) {
       const payload = {
         model: SEARCH_MODEL,
         input: rest,
-        tools: [{ type: 'web_search' }],
+        tools: [{ type: 'web_search', search_context_size: process.env.OPENAI_SEARCH_CONTEXT || 'low' }],
         max_output_tokens: Math.max(maxTokens, 2000), // البحث محتاج مساحة أكبر عشان يفكر ويلخّص النتائج
       };
       if (sys) payload.instructions = sys.content;
@@ -63,7 +71,7 @@ export default async function handler(req, res) {
 
     // ===== مسار عادي (من غير بحث): Chat Completions زي المعتاد =====
     const payload = {
-      model: (body.model && /^(gpt|o[134])/i.test(body.model)) ? body.model : NORMAL_MODEL,
+      model: chatModel(body.model, NORMAL_MODEL),
       max_completion_tokens: maxTokens, // max_tokens اتعمله deprecate عند OpenAI — دي الصيغة الحالية
       messages,
     };
