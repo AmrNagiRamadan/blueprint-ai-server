@@ -386,6 +386,33 @@ await check('post link is taken from the source page next to the post text', asy
   assert.equal(u, 'https://www.facebook.com/reel/4732289180393971/');
 });
 
+await check('round 12: all content types with shares, same-platform post links, open sections stay open, TikTok link, plan budget, digits', async () => {
+  const r = await page.evaluate(() => {
+    const today = new Date().toISOString().slice(0, 10), fb = 'https://www.facebook.com/dr.amrziz';
+    const posts = [{ id: 'a', url: fb, date: today, text: 'نصيحة', category: 'تعليمي', format: 'فيديو', evidence: [{ url: fb, quote: 'نصيحة' }] }, { id: 'b', url: fb, date: today, text: 'شوف https://www.youtube.com/watch?v=abc', category: 'تعليمي', format: 'فيديو', evidence: [{ url: fb, quote: 'شوف' }] }];
+    const html = bp323ContentHTML(posts);
+    const c = DB.clients.find(x => x.name === 'دكتور العيلة');
+    const out = { html, ytLink: posts[1].url, zeroShown: /إثبات ثقة[\s\S]{0,80}0 \/ 2/.test(html), linkGone: !/المنشور — غير متاح/.test(html) };
+    out.tiktok = tt333Decode('https%3A%2F%2Ftiktok.com%2F%40dr.amrabdelaziz%253Flang%253Den');
+    out.gone = tt333Accept('Couldn\'t find this account', 'https://www.tiktok.com/@x', { text: "Couldn't find this account" }).ok;
+    out.type = [tt333ContentType({ angle: 'قصص نجاح مرضى الحقن المجهري' }), tt333ContentType({ angle: 'عرض الكشف بخصم' }), tt333ContentType({ angle: 'إزاي تعرفي إنك محتاجة حقن مجهري' })];
+    out.digits = fmt(2000) + ' ' + money(2000);
+    c.answers.budgetNext = '30000'; openPlanOptions(c.id); out.budget = document.getElementById('poBudget')?.value; closeModal();
+    return out;
+  });
+  assert.equal(r.ytLink, '', 'no YouTube link for a Facebook post'); assert.ok(r.linkGone, 'no "not available" link text');
+  assert.ok(r.zeroShown, 'categories with 0 are listed');
+  assert.equal(r.tiktok, 'https://tiktok.com/@dr.amrabdelaziz'); assert.equal(r.gone, false);
+  assert.deepEqual(r.type, ['إثبات ثقة', 'عرض وبيع', 'تعليمي']);
+  assert.match(r.digits, /^2,000 2,000/); assert.equal(r.budget, '10000');
+  // open "review posts" section survives an approve click
+  const cid0 = await page.evaluate(() => DB.clients.find(x => x.name === 'دكتور العيلة').id);
+  await page.evaluate(cid => { const s = bp323State(getClient(cid)); s.posts = [{ id: 'p1', url: 'https://www.facebook.com/reel/1/', date: new Date().toISOString().slice(0, 10), text: 'x', category: 'تعليمي', format: 'فيديو', evidence: [{ url: 'https://www.facebook.com/dr.amrziz', quote: 'x' }] }]; document.getElementById('app').innerHTML = shell(bp323ContentHTML(s.posts), getClient(cid)); }, cid0);
+  await page.evaluate(() => { const d = [...document.querySelectorAll('details')].find(x => /راجع المنشورات/.test(x.textContent)); d.open = true; d.dispatchEvent(new Event('toggle')); });
+  const reopened = await page.evaluate(cid => { const s = bp323State(getClient(cid)); s.posts[0].reviewed = true; const html = shell(bp323ContentHTML(s.posts), getClient(cid)); return /<details open><summary>راجع المنشورات/.test(html) || /<details[^>]*open[^>]*><summary>راجع المنشورات/.test(html); }, cid0);
+  assert.ok(reopened, 'section stays open after re-render');
+});
+
 await check('server token is sent only to the Blueprint server', async () => {
   await page.evaluate(() => localStorage.setItem('bp_server_token', 'tok'));
   const headers = [];
