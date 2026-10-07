@@ -53,7 +53,8 @@ function fakeNetwork(ctx, net) {
       if (/^استخرج معلومات صريحة/.test(prompt)) return json(route, 200, ai({ officialName: { value: '', quote: '' }, evidence: [], facts: [], posts: [] }));
       if (/^أنت مدقق تسويق رقمي/.test(prompt)) {
         const keys = [...prompt.matchAll(/\["(\w+)","/g)].map(m => m[1]);
-        return json(route, 200, ai({ claims: [], sections: keys.map(key => ({ key, status: 'insufficient', scope: '', evidence: [], missing: ['بيانات'] })), findings: [], positioning: { current: '', proposal: '', evidence: [], missing: [] }, limits: [], nextQuestions: [] }));
+        const drFinding = prompt.includes('جراح أمراض النساء') && keys.includes('business') ? [{ section: 'business', observation: 'نشاط نسا وتوليد وحقن مجهري ' + net.ai.length, impact: 'x', action: 'y', priority: 'مهم', kind: 'observation', evidence: [{ url: DR_FB, quote: 'جراح أمراض النساء والتوليد', relation: 'neutral' }], missing: [] }] : [];
+        return json(route, 200, ai({ claims: [], sections: keys.map(key => ({ key, status: 'insufficient', scope: '', evidence: [], missing: ['بيانات'] })), findings: drFinding, positioning: { current: '', proposal: '', evidence: [], missing: [] }, limits: [], nextQuestions: [] }));
       }
       return json(route, 200, ai({}));
     }
@@ -360,6 +361,29 @@ await check('content mix: preliminary shares before review; post link taken from
   const r = await page.evaluate(() => { const today = new Date().toISOString().slice(0, 10); const posts = [{ id: 'a', url: 'https://www.facebook.com/dr.amrziz', date: today, text: 'الالم بعد الحقن المجهري https://www.facebook.com/reel/4732289180393971/', category: 'تعليمي', format: 'فيديو' }, { id: 'b', url: 'https://www.facebook.com/dr.amrziz', date: today, text: 'عرض', category: 'عرض وبيع', format: 'صورة' }]; const html = bp323ContentHTML(posts); return { html, url: posts[0].url }; });
   assert.match(r.html, /نسب مبدئية من 2 منشور/); assert.match(r.html, /تعليمي/); assert.match(r.html, /(?:50|٥٠)%/);
   assert.equal(r.url, 'https://www.facebook.com/reel/4732289180393971/');
+});
+
+await check('reviews are approve buttons; approval refreshes by itself and keeps earlier reviews', async () => {
+  const cid2 = await page.evaluate(() => DB.clients.find(x => x.name === 'دكتور العيلة').id);
+  // open the report tab directly (the stage gate would redirect: earlier stages are not complete in this fake client)
+  await page.evaluate(cid => { V.picks['unified324' + cid] = 'report'; STATE.view = 'client'; STATE.clientId = cid; STATE.tab = 'digitalAudit'; render(); }, cid2);
+  const f = await page.evaluate(cid => (bp323State(getClient(cid)).report.findings || []).find(x => x.verified), cid2);
+  assert.ok(f, 'an evidenced finding exists');
+  assert.equal(await page.locator('input[type=checkbox][onchange*="bp323ReviewFinding"]').count(), 0, 'no review checkboxes left');
+  await page.locator(`button[onclick*="bp323ReviewFinding"][onclick*="${f.id}"]`).first().click();
+  assert.equal(await page.evaluate(([cid, id]) => bp323State(getClient(cid)).report.findings.find(x => x.id === id).accepted, [cid2, f.id]), true);
+  // answers change → approving refreshes by itself, keeps the review, then approves
+  const n = net.ai.length;
+  const st = await page.evaluate(async cid => { const keep = auditMissing; auditMissing = () => []; try { const c = getClient(cid); auditState(c).proposals = []; brain(c).conflicts = []; c.answers.geo = 'الجيزة'; changed(c); await bp324Approve(cid); const r = bp323State(getClient(cid)).report; return { approved: !!r.approved, accepted: r.findings.filter(x => x.verified).every(x => x.accepted), modal: document.querySelector('.v-modal')?.innerText || '' }; } finally { auditMissing = keep; } }, cid2);
+  assert.ok(net.ai.slice(n).some(x => /^أنت مدقق تسويق رقمي/.test(x)), 'refreshed the diagnosis');
+  assert.ok(!net.ai.slice(n).some(x => /^استخرج معلومات صريحة/.test(x)), 'without re-extraction');
+  assert.equal(st.accepted, true, 'earlier review kept after refresh');
+  assert.equal(st.approved, true, st.modal);
+});
+
+await check('post link is taken from the source page next to the post text', async () => {
+  const u = await page.evaluate(fb => { const c = DB.clients.find(x => x.name === 'دكتور العيلة'); return tt333PostURL({ url: fb, text: 'اللام بعد الحقن المجهري بيفضل قد ايه؟؟…', evidence: [{ url: fb, quote: 'اللام بعد الحقن المجهري بيفضل قد ايه' }] }, c); }, DR_FB);
+  assert.equal(u, 'https://www.facebook.com/reel/4732289180393971/');
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
