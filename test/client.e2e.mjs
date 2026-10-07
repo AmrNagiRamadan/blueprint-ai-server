@@ -34,6 +34,7 @@ function fakeNetwork(ctx, net) {
     const req = route.request(), url = req.url();
     if (url.startsWith(SERVER + '/api/ai') || url.startsWith(QWEN)) {
       const body = JSON.parse(req.postData() || '{}'), msg = body.messages?.at(-1)?.content;
+      if (url.startsWith(QWEN) && net.mode.qwenInspection) return json(route, 400, { error: { code: 'data_inspection_failed', message: 'Input data may contain inappropriate content.' } });
       if (url.startsWith(QWEN)) net.qwen.push({ model: body.model, max: body.max_tokens, json: body.response_format?.type, auth: req.headers()['authorization'], image: Array.isArray(msg) });
       const prompt = Array.isArray(msg) ? msg.find(x => x.type === 'text')?.text || '' : String(msg || '');
       net.ai.push(prompt);
@@ -72,7 +73,7 @@ function fakeNetwork(ctx, net) {
       const target = url.slice('https://r.jina.ai/'.length);
       net.jina.push(target);
       if (target.startsWith(DR_FB)) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: دكتور العيلة - د. عمرو عبد العزيز | Facebook\nURL Source: ${DR_FB}\nMarkdown Content:\n${DR_BIO}\n` });
-      if (target.startsWith('https://ivfegypt.org')) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: IVF Egypt - Dr. Amr Abdelaziz\nURL Source: https://ivfegypt.org/\nMarkdown Content:\nمركز د. عمرو عبد العزيز للحقن المجهري وأطفال الأنابيب. خدماتنا: الحقن المجهري، تأخر الإنجاب، تحديد جنس المولود، جراحات المناظير.\n${'نستقبل الحالات في عيادة الهرم بالجيزة. '.repeat(8)}\n[خدماتنا](https://ivfegypt.org/services/)` });
+      if (target.startsWith('https://ivfegypt.org')) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: IVF Egypt - Dr. Amr Abdelaziz\nURL Source: https://ivfegypt.org/\nMarkdown Content:\nدكتور العيلة — مركز د. عمرو عبد العزيز للحقن المجهري وأطفال الأنابيب. خدماتنا: الحقن المجهري، تأخر الإنجاب، تحديد جنس المولود، جراحات المناظير.\n${'نستقبل الحالات في عيادة الهرم بالجيزة. '.repeat(8)}\n[خدماتنا](https://ivfegypt.org/services/)` });
       if (target.startsWith(FB) && !net.mode.fbDown) return route.fulfill({ status: 200, contentType: 'text/plain', body: `Title: ${NAME} | Facebook\nURL Source: ${FB}\nMarkdown Content:\n${NAME} لتقويم وزراعة الأسنان في المهندسين\n12 ألف متابع · 300 منشور\nمعلومات الصفحة: عيادة أسنان في شارع لبنان بالمهندسين وبنقدم تقويم وزراعة\nأحدث منشور: عرض تقويم الأسنان بخصم لحد آخر الشهر للمرضى الجدد\n` });
       return route.fulfill({ status: 451, body: 'blocked' });
     }
@@ -302,7 +303,21 @@ await check('switching AI to Qwen keeps the server reader; Qwen gets JSON mode, 
   const n = net.qwen.length;
   await page.evaluate(() => callAI('انسخ النص', { image: 'data:image/png;base64,iVBORw0KGgo=', maxTokens: 50 }));
   assert.equal(net.qwen[n].model, 'qwen-vl-max');
+  net.mode.qwenInspection = true;
+  const err = await page.evaluate(() => callAI('اكتب JSON', { json: true, maxTokens: 50, retry: false }).then(() => '', e => e.message));
+  net.mode.qwenInspection = false;
+  assert.match(err, /فحص المحتوى عند Alibaba/); assert.match(err, /data_inspection_failed/);
+  // a fresh browser that never saw /api/ai still finds the server from the saved search endpoint
+  const base = await page.evaluate(server => { localStorage.removeItem('bp_server_base'); localStorage.setItem('bp_search_config', JSON.stringify({ endpoint: server + '/api/search', model: 'gpt-4.1' })); return tt333ServerBase(); }, SERVER);
+  assert.equal(base, SERVER);
   await page.evaluate(server => { localStorage.setItem('blueprint_ai_endpoint', server + '/api/ai'); localStorage.removeItem('blueprint_ai_key'); localStorage.setItem('blueprint_ai_model', 'gpt-4.1-mini'); }, SERVER);
+});
+
+await check('a site named on the page but not naming the client is not accepted (identity check is real)', async () => {
+  const r = await page.evaluate(() => { const c = DB.clients.find(x => x.name === 'دكتور العيلة'); const page = { url: 'https://www.facebook.com/dr.amrziz', text: 'x 16431' }; return [tt333SiteBelongs(c, page, 'متجر ميكروفونات KMC500 Bluetooth'), tt333SiteBelongs(c, page, 'دكتور العيلة — خدماتنا')]; });
+  assert.equal(r[0], ''); assert.ok(r[1] && typeof r[1] === 'string', JSON.stringify(r));
+  const notes = await page.evaluate(() => DB.clients.flatMap(c => bp323State(c).sources.map(x => x.identityAuto333 || '')).join('|'));
+  assert.doesNotMatch(notes, /object Promise/);
 });
 
 await check('server token is sent only to the Blueprint server', async () => {
