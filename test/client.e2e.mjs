@@ -149,6 +149,17 @@ await check('a page that could not be read shows as failed (with the reason), no
   assert.deepEqual(x.attempts333.map(a => [a.method, a.ok]), [['direct', false], ['browser', false]]);
 });
 
+await check('study started while another screen is open still sends this client\'s data to the diagnosis', async () => {
+  // bp329Evaluate used the client open on screen; from the dashboard the prompt had no evidence and no answers.
+  const before = net.ai.length;
+  await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; STATE.clientId = null; go('dashboard'); }, cid);
+  const r = await page.evaluate(cid => bp324RunStudy(cid, true).then(() => V.errors[jobKey(cid, 'digitalAudit')] || ''), cid);
+  assert.equal(r, '', r);
+  const p = net.ai.slice(before).find(x => /^أنت مدقق تسويق رقمي/.test(x));
+  assert.ok(p, 'evaluation ran');
+  assert.match(p, /"geo":"المهندسين"/, 'answers of the studied client are in the prompt');
+});
+
 await check('blocked decisions are listed under the report, not injected into the evaluation prompt', async () => {
   // A live A/B run showed the injected note made the evaluator mark every section "insufficient".
   assert.ok(!net.ai.some(x => /^أنت مدقق تسويق رقمي/.test(x) && /قرارات موقوفة/.test(x)), 'no note in evaluation prompt');
