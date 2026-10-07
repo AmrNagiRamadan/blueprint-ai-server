@@ -67,6 +67,8 @@ export default async function handler(req, res) {
       max_completion_tokens: maxTokens, // max_tokens اتعمله deprecate عند OpenAI — دي الصيغة الحالية
       messages,
     };
+    if (typeof body.temperature === 'number' && !/^o[134]|^gpt-5/i.test(payload.model)) payload.temperature = body.temperature;
+    if (body.response_format) payload.response_format = body.response_format;
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + API_KEY },

@@ -149,11 +149,11 @@ await check('a page that could not be read shows as failed (with the reason), no
   assert.deepEqual(x.attempts333.map(a => [a.method, a.ok]), [['direct', false], ['browser', false]]);
 });
 
-await check('evaluation is told which decisions are blocked (no profitability without numbers)', async () => {
-  const p = net.ai.find(x => /^أنت مدقق تسويق رقمي/.test(x) && /قرارات موقوفة/.test(x));
-  assert.ok(p, 'blocked decisions in evaluation prompt');
-  assert.match(p, /الحكم على ربحية الإعلانات/);
-  assert.doesNotMatch(p.split('قرارات موقوفة')[1], /تحليل المحتوى والرسائل/);
+await check('blocked decisions are listed under the report, not injected into the evaluation prompt', async () => {
+  // A live A/B run showed the injected note made the evaluator mark every section "insufficient".
+  assert.ok(!net.ai.some(x => /^أنت مدقق تسويق رقمي/.test(x) && /قرارات موقوفة/.test(x)), 'no note in evaluation prompt');
+  const limits = await page.evaluate(cid => bp323State(getClient(cid)).report.limits, cid);
+  assert.ok(limits.some(x => /^قرارات موقوفة لحد ما البيانات تكمل/.test(x) && /الحكم على ربحية الإعلانات/.test(x)), JSON.stringify(limits));
 });
 
 await check('source status panel shows read / method / decisions', async () => {

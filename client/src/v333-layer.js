@@ -26,7 +26,7 @@ aiReady=function(){const ep=String(getAIEndpoint()||'').trim();return /\/api\/(a
 
 // Optional access token for the Blueprint server (BLUEPRINT_TOKEN on Vercel).
 const requestJSON333=requestJSON;
-requestJSON=function(url,body,headers={},signal){const base=tt333ServerBase(),token=tt333Token();if(base&&token&&String(url).startsWith(base+'/api/'))headers={...headers,'X-Blueprint-Token':token};return requestJSON333(url,body,headers,signal);};
+requestJSON=function(url,body,headers={},signal){const base=tt333ServerBase(),token=tt333Token();if(base&&token&&String(url).startsWith(base+'/api/'))headers={...headers,'X-Blueprint-Token':token,...(String(url).startsWith(base+'/api/read')?{Authorization:'Bearer '+token}:{})};return requestJSON333(url,body,headers,signal);};
 const aiSettings333=openAISettings;
 openAISettings=function(){aiSettings333.apply(this,arguments);const out=document.getElementById('ai_test_out');if(out&&!document.getElementById('bpServerToken333'))out.insertAdjacentHTML('beforebegin',field('رمز وصول سيرفر Blueprint (اختياري)','bpServerToken333',tt333Token(),'password','لو ضفت BLUEPRINT_TOKEN في Vercel اكتبه هنا. بيتحفظ في المتصفح ده بس ومش بيدخل النسخ الاحتياطية.'));};
 document.addEventListener('input',e=>{if(e.target.id==='bpServerToken333'){try{localStorage.setItem('bp_server_token',e.target.value.trim());}catch{}}});
@@ -36,11 +36,12 @@ async function tt333BrowserFetch(url,signal){
  const base=tt333ServerBase();if(!base)return {error:'not_configured'};
  if(TT333.down&&Date.now()-TT333.down.at<10*60000)return {error:'unavailable',note:TT333.down.note};
  const key=canonicalURL(url),hit=TT333.browser.get(key);if(hit&&Date.now()-hit.at<10*60000)return hit.promise;
- const promise=(async()=>{try{const r=await requestJSON(base+'/api/read',{url,includeHtml:true},{},signal);if(r?.html)TT333.html.set(key,r.html);return r;}catch(e){if(signal?.aborted)throw e;if([401,404,405].includes(e.status)){TT333.down={at:Date.now(),note:e.status===404?'مسار /api/read مش منشور على السيرفر — انشر آخر نسخة من blueprint-ai-server':e.status===401?'السيرفر طالب رمز وصول — اكتبه في «الاتصال والبحث»':'السيرفر رفض الطلب'};return {error:'unavailable',note:TT333.down.note};}return {error:'failed',note:String(e.message||e)};}})();
+ const promise=(async()=>{try{const r=tt333NormalizeRead(await requestJSON(base+'/api/read',{url,includeHtml:true},{},signal));if(r?.html)TT333.html.set(key,r.html);return r;}catch(e){if(signal?.aborted)throw e;if([401,404,405].includes(e.status)){TT333.down={at:Date.now(),note:e.status===404?'مسار /api/read مش منشور على السيرفر — انشر آخر نسخة من blueprint-ai-server':e.status===401?'السيرفر طالب رمز وصول — اكتبه في «الاتصال والبحث»':'السيرفر رفض الطلب'};return {error:'unavailable',note:TT333.down.note};}return {error:'failed',note:String(e.message||e)};}})();
  TT333.browser.set(key,{at:Date.now(),promise});let r;try{r=await promise;}catch(e){TT333.browser.delete(key);throw e;}if(r?.error)TT333.browser.delete(key);return r;}
+function tt333NormalizeRead(r){if(!r||typeof r!=='object')return {error:'failed',note:'رد غير متوقع من السيرفر'};const blocked=!!r.status&&r.status!=='read';return {...r,links:toArr(r.links).map(l=>({href:l.href||l.url||'',text:l.text||l.label||''})).filter(l=>/^https?:/i.test(l.href)),loginWall:!!r.loginWall||blocked,wallNote:blocked?String(r.reason||''):''};}
 function tt333AsReader(r){return `Title: ${r.title||''}\nURL Source: ${r.finalUrl||r.url}\n${r.description?'Description: '+r.description+'\n':''}Markdown Content:\n${r.text||''}\n\n${toArr(r.links).map(l=>`[${String(l.text||'').replace(/[[\]]/g,'')}](${l.href})`).join('\n')}`;}
 function tt333Accept(raw,url,r){
- if(r.loginWall)return {ok:false,note:'صفحة دخول ماتقفلتش حتى في متصفح السيرفر'};
+ if(r.loginWall)return {ok:false,note:r.wallNote||'صفحة دخول ماتقفلتش حتى في متصفح السيرفر'};
  let social=false;try{social=/facebook\.com|instagram\.com/.test(new URL(url).hostname);}catch{}
  if(social){const v=socialPageRead(raw,url);if(!v.accepted)return {ok:false,note:v.reason||'المحتوى بعد التنظيف مش كفاية'};let text=String(v.cleaned||v.cleanedText||v.text||'').slice(0,22000);const posts=bp323Links(raw,url).filter(u=>/\/posts\/|\/reel\/|\/p\/|\/videos\/|permalink|story_fbid/.test(u));if(posts.length)text+='\nروابط محتوى ظهرت في المصدر:\n'+posts.slice(0,30).join('\n');return text.trim()?{ok:true,text}:{ok:false,note:'لم يظهر محتوى مفيد بعد التنظيف'};}
  if(blockedSource(raw)||String(r.text||'').trim().length<120)return {ok:false,note:'الصفحة محجوبة أو النص قليل'};
@@ -49,12 +50,12 @@ function tt333Accept(raw,url,r){
 // ---- Steps 1+2 per URL, with reuse of recent successful reads ----
 const read333=bp323Read;
 bp323Read=async function(url,signal){
- const c=tt333JobClient(signal),key=canonicalURL(url),run=c&&TT333.runs.get(c.id);
+ const c=tt333JobClient(signal),key=canonicalURL(url),run=c&&TT333.runs.get(c.id),own=!!run&&(run.own.has(key)||tt333Seeds(c).some(u=>canonicalURL(u)===key));
  if(c&&!TT333.force.has(c.id)){const old=bp323State(c).sources.find(x=>canonicalURL(x.url)===key&&['read','identity_unverified'].includes(x.status)&&x.text&&Date.now()-(x.at||0)<TT333.TTL);if(old){const doc={...old,status:'read',fromCache333:true};delete doc.note;return doc;}}
  let doc;try{doc=await read333(url,signal);}catch(e){if(signal?.aborted||e?.name==='AbortError')throw e;doc={url,text:'',status:'unavailable',note:String(e.message||e),at:Date.now()};}
  const attempts=[{method:'direct',ok:doc.status==='read',note:doc.status==='read'?'':String(doc.note||'')}];
- if(doc.status!=='read'&&!bp323Library(url)&&(!run||run.browserLeft>0)){
-  if(run)run.browserLeft--;
+ if(doc.status!=='read'&&!bp323Library(url)&&(!run||own||run.browserLeft>0)){
+  if(run&&!own)run.browserLeft--;
   const r=await tt333BrowserFetch(url,signal);if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   if(r&&!r.error){const raw=tt333AsReader(r),ok=tt333Accept(raw,url,r);attempts.push({method:'browser',ok:ok.ok,note:ok.ok?(r.dismissed?.clicked?.length||r.dismissed?.removed?'اتقفلت نافذة منبثقة قبل القراءة':''):ok.note});if(ok.ok){doc={...doc,url,readURL:r.finalUrl||url,text:ok.text,rawText:raw.slice(0,60000),status:'read',at:Date.now()};delete doc.note;}}
   else attempts.push({method:'browser',ok:false,note:r?.error==='not_configured'?'متصفح السيرفر مش متوصل (محتاج رابط سيرفر Blueprint في الإعدادات)':String(r?.note||r?.error||'')});
@@ -70,8 +71,7 @@ bp324HTML=async function(url,signal){const c=tt333JobClient(signal),key=canonica
 const ai333=callAI;
 callAI=async function(prompt,opts={}){
  const text=String(prompt||''),c=tt333JobClient(opts.signal);
- if(c&&/^أنت مدقق تسويق رقمي\./.test(text)){const blocked=tt333Decisions(c).filter(x=>!x.ok);if(blocked.length)prompt=text+`\nقرارات موقوفة لنقص بيانات ضرورية — ممنوع تصدر فيها حكم أو رقم، اعتبر الجزء المرتبط insufficient واذكر الناقص، وكمّل باقي الأقسام عادي بالبيانات المتاحة: ${JSON.stringify(blocked.map(x=>({decision:x.label,missing:x.missing})))}`;}
- const cacheable=c&&opts.json&&!opts.image&&/^استخرج معلومات صريحة وأدلة حرفية من هذا المصدر\./.test(text),key=cacheable?bp329Hash(text):'';
+  const cacheable=c&&opts.json&&!opts.image&&/^استخرج معلومات صريحة وأدلة حرفية من هذا المصدر\./.test(text),key=cacheable?bp329Hash(text):'';
  if(cacheable){const hit=tt333Cache(c)[key];if(hit)return JSON.parse(JSON.stringify(hit.r));}
  try{const r=await ai333(prompt,opts);if(cacheable&&r&&!r.raw&&Array.isArray(r.evidence)&&Array.isArray(r.facts)&&Array.isArray(r.posts))tt333CachePut(c,key,r);return r;}
  catch(e){if(opts.signal&&TT333.soft.has(opts.signal)&&!opts.signal.aborted&&e?.name!=='AbortError'){tt333Issue(c,'خطوة تحليل أثناء جمع المصادر اتعذرت: '+String(e.message||e).slice(0,160));return opts.json?{}:'';}throw e;}};
@@ -86,7 +86,7 @@ fetchAdsV317=async function(c,comp,signal){try{return await ads333(c,comp,signal
 // ---- Collect: existing chain, then step 3 (alternatives) ----
 const collect333=bp323Collect;
 bp323Collect=async function(c,signal,status){
- const s=bp323State(c);s.collectIssues333=[];TT333.runs.set(c.id,{browserLeft:TT333_BROWSER_PER_RUN});TT333.soft.add(signal);
+ const s=bp323State(c);s.collectIssues333=[];TT333.runs.set(c.id,{browserLeft:TT333_BROWSER_PER_RUN,own:new Set()});TT333.soft.add(signal);
  try{
   if(tt333Seeds(c).length){try{await collect333(c,signal,status);}catch(e){if(signal.aborted||e?.name==='AbortError')throw e;tt333Issue(c,'خطوة من جمع المصادر وقفت: '+String(e.message||e).slice(0,160)+' — كمّلنا باللي اتقرأ.');}}
   if(signal.aborted)return;
@@ -95,8 +95,9 @@ bp323Collect=async function(c,signal,status){
  }finally{TT333.runs.delete(c.id);TT333.soft.delete(signal);TT333.force.delete(c.id);tt333DedupeSources(c);for(const x of s.sources)if(x.status==='identity_unverified'&&!String(x.text||'').trim()){x.status='unavailable';x.note=toArr(x.attempts333).filter(a=>!a.ok&&a.note).map(a=>a.note).at(-1)||'اتعذرت القراءة';}const ok=new Set(toArr(s.identityConfirmed333));for(const x of s.sources)if(ok.has(canonicalURL(x.url))&&x.text){x.identityReviewed=true;x.status='read';x.identityAuto333='أكده الفريق';delete x.note;}s.collectedAt333=Date.now();persist();}};
 // The official page often names the website as a bare domain ("ivfegypt.org") or behind
 // l.facebook.com/l.php?u=…; the link extractor only sees full links, so the site was never read.
-const TT333_NOT_SITE=/(?:^|\.)(?:facebook\.com|fb\.com|fb\.me|fb\.watch|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com|linkedin\.com|whatsapp\.com|wa\.me|google\.[a-z.]+|goo\.gl|gmail\.com|hotmail\.com|outlook\.com|yahoo\.com|live\.com|icloud\.com|jina\.ai|apple\.com|play\.google\.com|bit\.ly)$/i;
-function tt333SiteCandidates(text){const out=new Set(),t=String(text||'');for(const m of t.matchAll(/l\.facebook\.com\/l\.php\?u=([^&\s)"']+)/gi)){try{out.add(decodeURIComponent(m[1]));}catch{}}for(const m of t.matchAll(/(?<![@\w.\/:-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|org|net|info|biz|co|io|me|clinic|health|care|online|site|store|eg|sa|ae|kw|qa)(?:\.[a-z]{2})?)(\/[^\s)"'<>،]*)?/gi))out.add('https://'+m[1]+(m[2]||'/'));for(const m of t.matchAll(/\]\((https?:\/\/[^\s)]+)\)/g))out.add(m[1]);return [...out].map(u=>{try{const x=new URL(u);x.hash='';return safeURL(x.href)&&!TT333_NOT_SITE.test(x.hostname.replace(/^www\./,''))&&!bp324Social(x.href)?x.href:'';}catch{return '';}}).filter(Boolean);}
+const TT333_NOT_SITE=/(?:^|\.)(?:facebook\.com|fb\.com|fb\.me|fb\.watch|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|twitter\.com|x\.com|linkedin\.com|whatsapp\.com|wa\.me|google\.[a-z.]+|goo\.gl|gmail\.com|hotmail\.com|outlook\.com|yahoo\.com|live\.com|icloud\.com|jina\.ai|apple\.com|play\.google\.com|bit\.ly|snapchat\.com|t\.me|telegram\.me|threads\.net|pinterest\.com|messenger\.com|m\.me|linktr\.ee)$/i;
+function tt333SiteCandidates(text){const out=new Set(),t=String(text||'');for(const m of t.matchAll(/l\.facebook\.com\/l\.php\?u=([^&\s)"']+)/gi)){try{out.add(decodeURIComponent(m[1]));}catch{}}const plain=t.replace(/\S*%[0-9a-f]{2}\S*/gi,' ').replace(/(?:https?:)?\/\/\S+/gi,' ').replace(/\]\([^)]*\)/g,' ');for(const m of plain.matchAll(/(?<![@\w.\/:%-])((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|org|net|info|biz|co|io|me|clinic|health|care|online|site|store|eg|sa|ae|kw|qa)(?:\.[a-z]{2})?)(\/[^\s)"'<>،]*)?/gi))out.add('https://'+m[1]+(m[2]||'/'));for(const m of t.matchAll(/\]\((https?:\/\/[^\s)]+)\)/g))out.add(m[1]);return [...out].map(u=>{try{const x=new URL(u);x.hash='';return safeURL(x.href)&&!TT333_NOT_SITE.test(x.hostname.replace(/^www\./,''))&&!bp324Social(x.href)?x.href:'';}catch{return '';}}).filter(Boolean);}
+async function tt333SiteBelongs(c,page,text){const n=tt333Norm(text);const strip=x=>tt333Norm(x).replace(/(?:^|\s)(?:د\.?|دكتور|الدكتور|dr\.?|doctor)(?=\s)/g,' ').replace(/\s+/g,' ').trim();const names=[bp324Official(c),c.name].flatMap(x=>String(x||'').split(/[-|،,:]/)).map(strip).filter(x=>x.length>=6);if(names.some(x=>n.includes(x)))return 'اسم العميل مذكور في الموقع';let handle='';try{handle=(new URL(page.url).pathname.split('/').filter(Boolean)[0]||'').toLowerCase();}catch{}if(handle.length>3&&n.includes(handle))return 'اسم الحساب مذكور في الموقع';const phones=String(page.rawText||page.text||'').match(/\d{5,}/g)||[];if(phones.some(p=>String(text).replace(/\s/g,'').includes(p)))return 'نفس رقم التواصل مذكور في الموقع';return '';}
 async function tt333LinkedSites(c,signal,status){
  const s=bp323State(c),d=auditState(c);
  const official=s.sources.filter(x=>x.status==='read'&&bp324Social(x.url)&&(!x.discoveryEvidenceURL||x.identityReviewed));
@@ -105,15 +106,17 @@ async function tt333LinkedSites(c,signal,status){
  for(const page of official){
   const sites=tt333SiteCandidates((page.rawText||'')+'\n'+(page.text||'')).filter(u=>!have(u)).slice(0,2);
   for(const site of sites){
-   if(signal.aborted||budget<=0)return;budget--;status('قراءة الموقع المذكور في صفحة العميل: '+tt333Host(site));
+   if(signal.aborted||budget<=0)return;budget--;status('قراءة الموقع المذكور في صفحة العميل: '+tt333Host(site));TT333.runs.get(c.id)?.own.add(canonicalURL(site));
    const doc=await bp323Read(site,signal);if(signal.aborted)return;
-   Object.assign(doc,{linkedFrom333:page.url,identityReviewed:true,identityAuto333:'الرابط مذكور في صفحة العميل الرسمية',platform:'Website',kind:doc.kind||'website'});
+   Object.assign(doc,{linkedFrom333:page.url,platform:'Website',kind:doc.kind||'website'});
+   const why=doc.status==='read'?tt333SiteBelongs(c,page,doc.text):'';
+   if(why){doc.identityReviewed=true;doc.identityAuto333='مذكور في صفحة العميل · '+why;}else if(doc.status==='read'){doc.status='identity_unverified';doc.identityReviewed=false;doc.discoveryEvidenceURL=page.url;doc.note='موقع ظهر في صفحة العميل بس مفيهوش اسم العميل أو رقمه — مستبعد لحد ما تأكده.';}
    s.sources.push(doc);persist();
    if(doc.status!=='read')continue;
    if(!String(d.website||'').trim())d.website=site;
    const html=await bp324HTML(site,signal);if(signal.aborted)return;
    if(html&&s.trackingProbe?.status!=='html_read')s.trackingProbe={status:'html_read',url:site,at:html.at||Date.now(),markers:bp324Tracking(html.text),limits:'وجود العلامة لا يثبت سلامة الأحداث. غيابها من HTML لا يثبت عدم وجود التتبع.'};
-   const host=new URL(site).hostname,inner=[...new Set(bp323Links((html?.text||'')+'\n'+(doc.rawText||''),site))].filter(u=>{try{return new URL(u).hostname===host&&/about|service|services|treatment|price|offer|contact|من-?نحن|خدمات|عروض|اسعار|أسعار/i.test(decodeURIComponent(u))&&!have(u);}catch{return false;}}).slice(0,3);
+   const host=new URL(site).hostname,inner=[...new Set(bp323Links((html?.text||'')+'\n'+(doc.rawText||''),site))].filter(u=>{try{const x=new URL(u);return x.hostname===host&&!/\.(?:css|js|json|xml|txt|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|pdf|mp4|webm)$/i.test(x.pathname)&&!/\/wp-(?:content|includes|json|admin)\/|\/feed\/?$|\/xmlrpc/i.test(x.pathname)&&/about|service|services|treatment|price|package|offer|success|clinics|contact|من-?نحن|خدمات|الخدمات|عروض|اسعار|أسعار|باقات|قصص-?نجاح|العيادات/i.test(decodeURIComponent(u))&&!have(u);}catch{return false;}}).slice(0,3);
    for(const u of inner){if(signal.aborted||budget<=0)return;budget--;status('قراءة صفحة من موقع العميل: '+decodeURIComponent(new URL(u).pathname).slice(0,40));const p=await bp323Read(u,signal);if(signal.aborted)return;Object.assign(p,{linkedFrom333:site,identityReviewed:true,identityAuto333:'صفحة من موقع العميل',platform:'Website',kind:p.kind||'website'});s.sources.push(p);persist();}
   }
  }}
@@ -177,7 +180,7 @@ function tt333Decisions(c){
 
 // A study with no readable source still runs from the sales message + answers, marked preliminary.
 const run333=window.bp324RunStudy;
-window.bp324RunStudy=async function(cid,reuse=false){{const c=getClient(cid),cache=c&&bp323State(c).claimCache329;if(cache?.claims&&!cache.tt333){cache.claims=tt333Reclassify(cache.claims,c);cache.tt333=true;}}const r=await run333(cid,reuse);const c=getClient(cid);if(!c)return r;const s=bp323State(c);if(s.report){const docs=bp324Docs(c).filter(d=>!['meta_report','tracking_html'].includes(d.kind)),note='دراسة مبدئية: مفيش مصدر مقروء عن العميل؛ الأحكام مبنية على رسالة السيلز والإجابات بس.',lim=toArr(s.report.limits);if(!docs.length&&!lim.includes(note)){s.report.limits=[note,...lim];s.report.phase='preliminary';persist();render();}}return r;};
+window.bp324RunStudy=async function(cid,reuse=false){{const c=getClient(cid),cache=c&&bp323State(c).claimCache329;if(cache?.claims&&!cache.tt333){cache.claims=tt333Reclassify(cache.claims,c);cache.tt333=true;}}const r=await run333(cid,reuse);const c=getClient(cid);if(!c)return r;const s=bp323State(c);if(s.report){const blocked=tt333Decisions(c).filter(x=>!x.ok),bnote=blocked.length?'قرارات موقوفة لحد ما البيانات تكمل: '+blocked.map(x=>x.label+' (ناقص: '+x.missing.join('، ')+')').join(' · '):'';s.report.limits=[...toArr(s.report.limits).filter(x=>!/^قرارات موقوفة لحد ما البيانات تكمل/.test(x)),...(bnote?[bnote]:[])];persist();const docs=bp324Docs(c).filter(d=>!['meta_report','tracking_html'].includes(d.kind)),note='دراسة مبدئية: مفيش مصدر مقروء عن العميل؛ الأحكام مبنية على رسالة السيلز والإجابات بس.',lim=toArr(s.report.limits);if(!docs.length&&!lim.includes(note)){s.report.limits=[note,...lim];s.report.phase='preliminary';persist();render();}}return r;};
 
 // ---- Actions ----
 window.tt333Retry=async function(cid,i){const c=getClient(cid),s=c&&bp323State(c),x=s?.sources[i];if(!x)return;const url=x.url;await withJob(cid,'src333',async(signal,status)=>{status('إعادة قراءة '+tt333Host(url)+'…');TT333.browser.delete(canonicalURL(url));TT333.down=null;TT333.force.add(cid);let doc;try{doc=await bp323Read(url,signal);}finally{TT333.force.delete(cid);}if(signal.aborted)return;const cur=s.sources.find(y=>canonicalURL(y.url)===canonicalURL(url));for(const k of ['discoveryEvidenceURL','alternateFor333','identityReviewed','identityAuto333','platform','kind'])if(cur&&cur[k]!==undefined&&doc[k]===undefined)doc[k]=cur[k];if(cur)s.sources[s.sources.indexOf(cur)]=doc;else s.sources.push(doc);changed(c,(doc.status==='read'?'إعادة قراءة نجحت: ':'إعادة قراءة لسه متعذرة: ')+url);toast(doc.status==='read'?'اتقرأ المصدر. اضغط «حدّث التشخيص» علشان يدخل الدراسة.':'لسه متعذر: '+(doc.note||'')+' — تقدر تضيف نص أو صور بداله.');});};

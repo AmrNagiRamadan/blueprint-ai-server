@@ -6,18 +6,18 @@ Vercel serverless functions used by the Techno Team / Blueprint OS app (`client/
 | --- | --- |
 | `POST /api/ai` | Proxy to OpenAI Chat Completions (key stays on the server). |
 | `POST /api/search` | Web search through the OpenAI Responses API; returns verified sources. |
-| `POST /api/read` | Headless Chromium reader: loads a page, closes dismissible login/cookie dialogs, returns text + links (+ HTML). Reports `loginWall: true` when a wall cannot be closed — it never logs in. |
+| `POST /api/read` | Public-page reader (`lib/reader.js`): direct fetch with a normal browser identity, then headless Chromium; uses the page description (og tags) when the page renders no text without login. Returns `status` (`read`/`unavailable`/`blocked`), `reason`, text, links and `attempts`. It never logs in. |
 
 ## Environment variables (Vercel → Settings → Environment Variables)
 
 | Name | Required | Notes |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | yes | Used by `/api/ai` and `/api/search`. |
-| `BLUEPRINT_TOKEN` | recommended | When set, every request must send `X-Blueprint-Token`. Put the same value in the app: «الاتصال والبحث» → «رمز وصول سيرفر Blueprint». Without it anyone with the URL can use your OpenAI key and the browser reader. |
+| `BLUEPRINT_TOKEN` + `READER_API_TOKEN` | recommended | Give both the same value and put it in the app: «الاتصال والبحث» → «رمز وصول سيرفر Blueprint». `/api/ai` and `/api/search` then require `X-Blueprint-Token`, `/api/read` requires `Authorization: Bearer`. Without them anyone with the URL can use your OpenAI key and the reader. |
 | `ALLOWED_ORIGINS` | optional | Comma-separated CORS origins. Use `null` for the HTML file opened from disk, e.g. `null,https://my-app.example`. |
 | `OPENAI_MODEL`, `OPENAI_SEARCH_MODEL` | optional | Model overrides for `/api/ai`. |
 
-`/api/read` uses `@sparticuz/chromium` + `puppeteer-core` (Node 22). Private/internal addresses are blocked, including redirects and sub-requests.
+`/api/read` uses `@sparticuz/chromium` + `playwright-core`. Private/internal addresses are blocked, including redirects and sub-requests.
 
 ## App (client)
 
@@ -33,6 +33,6 @@ In the app, set the AI endpoint to `https://<your-project>.vercel.app/api/ai`; s
 
 ```
 npm install
-CHROME_PATH=/path/to/chromium npm test          # /api/read against local fixture pages
+npm test                                          # reader unit tests
 CHROME_PATH=/path/to/chromium npm run test:client  # app end-to-end, all network faked
 ```
