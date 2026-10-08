@@ -499,6 +499,26 @@ await check('credit: rerun with the same data reuses the diagnosis and searches;
   n = net.ai.length; await page.evaluate(cid => { delete bp323State(getClient(cid)).evaluation329; return tt333RefreshAll(cid); }, cid); assert.ok(evals(n) > 0, 'refresh all asks again');
 });
 
+await check('live findings: agency offer is not a client claim, places checked, same-first-name doctor excluded, library Markdown parsed', async () => {
+  const r = await page.evaluate(() => {
+    const msg = 'أهلاً دكتور عماد، تحياتنا لجهودك في خدمة أهالي قنا ونجع حمادي. مع حرص حضرتك على توفير خبرة مستشفى أبو الريش. بنقدم لحضرتك في تيكنو تيم عرض تصميم موقع يبرز سجلك الأكاديمي. • موقع IVF Egypt. السعر: 5,000 جنيه';
+    const cls = tt333Reclassify([{ statement: 'السعر 5,000 جنيه', sourceQuote: 'السعر: 5,000 جنيه' }, { statement: 'الموقع يبرز السجل الأكاديمي', sourceQuote: 'يبرز سجلك الأكاديمي' }, { statement: 'وجود مرجع رقمي يمنح الأهالي الاطمئنان', sourceQuote: 'x' }, { statement: 'نماذج حية IVF Egypt', sourceQuote: 'موقع IVF Egypt' }, { statement: 'خبرة أبو الريش', sourceQuote: 'توفير خبرة مستشفى أبو الريش' }], null, msg).map(x => x.subject || 'client');
+    const docs = [{ url: 'https://fb.com/x', kind: 'source', text: 'Page · Doctor\nقنا, Qena, Egypt' }];
+    const place = tt333PlaceCheck({ statement: 'جهودك الطبية رائدة في خدمة أهالي قنا ونجع حمادي' }, docs);
+    const travel = tt333PlaceCheck({ statement: 'توفير خبرة أبو الريش داخل قنا لتجنيب الأهالي السفر للقاهرة' }, docs);
+    const c = { name: 'دكتور عماد حمدي الشرقاوي', answers: {}, digitalAudit: { officialName: 'دكتور عماد حمدي الشرقاوي استشاري جراحة العظام' } };
+    const other = [tt333OtherPerson(c, 'عن د. عماد يسري استشاري العظام'), tt333OtherPerson(c, 'دكتور عماد حمدى الشرقاوى')];
+    const md = 'Library ID: 1089765647031169\n\nStarted running on Sep 30, 2026\n\n* * *\n\n![Image 1: د.زناتى الطوخى](https://x/y.jpg)\n\n[د.زناتى الطوخى لجراحة العظام](https://www.facebook.com/p)\n\n**Sponsored**\n\nلأهالينا في قنا ونجع حمادي\n\nActive\n';
+    const lib = bp329ParseLibrary(md).map(x => [x.advertiser, x.status, /قنا/.test(x.text)]);
+    return { cls, place: [place.verdict, place.missing], travel, other, lib };
+  });
+  assert.deepEqual(r.cls, ['agency', 'agency', 'agency', 'agency', 'client']);
+  assert.equal(r.place[0], 'partial'); assert.match(r.place[1][0], /نجع حمادي/);
+  assert.equal(r.travel, null, 'a city the message travels to is not checked; the place alone does not confirm a hospital claim');
+  assert.deepEqual(r.other, ['د. عماد يسري', '']);
+  assert.deepEqual(r.lib, [['د.زناتى الطوخى لجراحة العظام', 'active', true]]);
+});
+
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
 
 await ctx.close();
