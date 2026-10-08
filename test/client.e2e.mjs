@@ -564,6 +564,12 @@ await check('Instagram reader session: saved from settings, sent only with /api/
   await page.evaluate(() => localStorage.removeItem('bp_ig_session'));
 });
 
+await check('sources that could not be read are not shown and do not add limits', async () => {
+  const r = await page.evaluate(() => { const c = DB.clients.find(x => bp323State(x).sources.some(y => y.status === 'unavailable') && bp323State(x).sources.some(y => y.status === 'read')); const s = bp323State(c); const bad = s.sources.find(y => y.status === 'unavailable'); const html = tt333Panel(c); const v = bp324Validate({ claims: [], sections: [], findings: [], positioning: {}, limits: ['تعذر قراءة صفحة Instagram (تسجيل الدخول)', 'لم نقرأ تقييمات مرضى موثقة'], nextQuestions: [] }, [], []); return { failedShown: html.includes(tt333Host(bad.url) + '</a>') || /✕ اتعذّر/.test(html), chip: /اتعذّر \d/.test(html), readShown: /✓ اتقرأ/.test(html), limits: v.limits }; });
+  assert.equal(r.failedShown, false); assert.equal(r.chip, false); assert.equal(r.readShown, true);
+  assert.deepEqual(r.limits, ['لم نقرأ تقييمات مرضى موثقة']);
+});
+
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
 
 await ctx.close();
