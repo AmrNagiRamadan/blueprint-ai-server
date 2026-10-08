@@ -12,3 +12,16 @@ test('leftover browser profiles are removed from tmp, other files are kept',asyn
 
 import {chatModel} from '../api/ai.js';import {searchModel} from '../api/search.js';
 test('credit: the app cannot pick an expensive model unless the owner allows it',()=>{assert.equal(chatModel('gpt-4.1-mini','gpt-4.1-mini',{}),'gpt-4.1-mini');for(const m of ['gpt-4.1','gpt-4o','gpt-5','o3',undefined])assert.equal(chatModel(m,'gpt-4.1-mini',{}),'gpt-4.1-mini');assert.equal(chatModel('gpt-4.1','x',{OPENAI_ALLOW_ANY_MODEL:'1'}),'gpt-4.1');assert.equal(searchModel('gpt-4.1',{}),'gpt-4.1-mini');assert.equal(searchModel('gpt-4.1',{OPENAI_SEARCH_MODEL:'gpt-4.1'}),'gpt-4.1');});
+
+import {fbPluginURL,instagramUser,xUser,isMaps,xProfileText} from '../lib/reader.js';
+test('platform routes: Facebook page plugin, Instagram/X profiles, Google Maps links',()=>{
+  assert.match(fbPluginURL('https://www.facebook.com/Dr.Emad.Hamdyy'),/plugins\/page\.php\?href=https%3A%2F%2Fwww\.facebook\.com%2FDr\.Emad\.Hamdyy&tabs=timeline/);
+  assert.match(fbPluginURL('https://m.facebook.com/profile.php?id=123'),/profile\.php%3Fid%3D123/);
+  assert.match(fbPluginURL('https://www.facebook.com/clinic/about'),/%2Fclinic&/);
+  for(const u of ['https://www.facebook.com/x/posts/1','https://www.facebook.com/reel/1','https://www.facebook.com/groups/1','https://example.com/a'])assert.equal(fbPluginURL(u),'');
+  assert.equal(instagramUser('https://www.instagram.com/dr.emad.hamdy1/'),'dr.emad.hamdy1');assert.equal(instagramUser('https://www.instagram.com/p/abc/'),'');
+  assert.equal(xUser('https://x.com/NASA'),'NASA');assert.equal(xUser('https://twitter.com/NASA/status/1'),'');assert.equal(xUser('https://x.com/home'),'');
+  for(const u of ['https://goo.gl/maps/abc','https://maps.app.goo.gl/xyz','https://www.google.com/maps/place/x','https://maps.google.com/?cid=1'])assert.equal(isMaps(u),true,u);
+  assert.equal(isMaps('https://goo.gl/abc'),false);
+  assert.match(xProfileText({name:'N',screen_name:'n',followers:1200,following:3,tweets:40,likes:5,description:'d'}),/1,200 متابع/);
+});
