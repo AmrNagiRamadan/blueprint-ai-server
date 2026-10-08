@@ -71,6 +71,7 @@ function fakeNetwork(ctx, net) {
     if (url.startsWith(SERVER + '/api/read')) {
       const body = JSON.parse(req.postData() || '{}');
       net.read.push(body.url);
+      if (net.mode.plugin && /facebook\.com\/plugin_page_test|instagram\.com\/clinic_ig/.test(body.url)) return json(route, 200, { url: body.url, status: 'read', method: /instagram/.test(body.url) ? 'instagram_preview' : 'facebook_plugin', title: 'عيادة', text: /instagram/.test(body.url) ? 'Clinic (@clinic_ig)\n223 Followers, 316 Following, 45 Posts' : 'عيادة الاختبار\n٨٫١ ألف متابع\n3d\nبوست عن علاج تقوس الساقين\n406\n27', links: [{ url: 'https://www.facebook.com/plugin_page_test/posts/pfbid0abc' }], coverage: 'partial', limitations: ['من إضافة فيسبوك'] });
       if (net.mode.readerOnlyFB) return json(route, 200, { ok: true, url: body.url, title: 'Log in', text: 'Log in', links: [], loginWall: true });
       if (body.url.startsWith(SITE)) return json(route, 200, { ok: true, url: body.url, finalUrl: body.url, title: NAME, text: SITE_TEXT, links: [{ href: FB, text: 'Facebook' }], loginWall: false, dismissed: { clicked: ['Close'], removed: 0 }, html: `<html><head><script>fbq('init','123')</script></head><body>${SITE_TEXT}<a href="${FB}">fb</a></body></html>` });
       return json(route, 200, { ok: true, url: body.url, title: 'Log in', text: 'Log in to continue', links: [], loginWall: true });
@@ -208,7 +209,7 @@ await check('retry re-reads only the failed source', async () => {
   await page.evaluate(([cid, i]) => tt333Retry(cid, i), [cid, i]);
   const after = net.jina.slice(before.jina);
   assert.ok(after.length >= 1 && after.every(u => u.startsWith(FB)), 'only the failed URL: ' + after.join(','));
-  assert.equal(net.read.length, before.read, 'no browser call needed once direct read worked');
+  assert.ok(net.read.slice(before.read).every(u => u.startsWith(FB)) && net.read.length - before.read <= 1, 'at most the server route for the same page');
   const st = await page.evaluate(([cid, fb]) => bp323State(getClient(cid)).sources.find(y => canonicalURL(y.url) === canonicalURL(fb)).status, [cid, FB]);
   assert.equal(st, 'read');
 });
@@ -517,6 +518,25 @@ await check('live findings: agency offer is not a client claim, places checked, 
   assert.equal(r.travel, null, 'a city the message travels to is not checked; the place alone does not confirm a hospital claim');
   assert.deepEqual(r.other, ['د. عماد يسري', '']);
   assert.deepEqual(r.lib, [['د.زناتى الطوخى لجراحة العظام', 'active', true]]);
+});
+
+await check('Facebook page / Instagram profile go to the server route first and its result is used as is', async () => {
+  net.mode.plugin = true; const j0 = net.jina.length;
+  const r = await page.evaluate(async () => { const fb = await bp323Read('https://www.facebook.com/plugin_page_test'), ig = await bp323Read('https://www.instagram.com/clinic_ig'); return [fb.status, fb.method333, /٨٫١ ألف متابع/.test(fb.text), /posts\/pfbid0abc/.test(fb.text), ig.status, ig.method333, /223 Followers/.test(ig.text), tt333ServerRoute('https://www.facebook.com/x/posts/1'), tt333ServerRoute('https://maps.app.goo.gl/abc'), tt333ServerRoute('https://x.com/NASA/status/1')]; });
+  net.mode.plugin = false;
+  assert.deepEqual(r, ['read', 'server_facebook_plugin', true, true, 'read', 'server_instagram_preview', true, false, true, false]);
+  assert.equal(net.jina.slice(j0).filter(u => /plugin_page_test|clinic_ig/.test(u)).length, 0, 'no direct read needed');
+});
+
+await check('Facebook plugin posts become post rows with exact counts; «حمادى» matches «حمادي»', async () => {
+  const r = await page.evaluate(() => {
+    const txt = 'عيادة د. عماد\n٨٫١ ألف متابع\nعيادة د. عماد\n3d\nطفل عنده تقوس اتعالج ☎️عياده نجع حمادى ___عماره الاوقاف\n406\n27\n113\nعيادة د. عماد\nSep 16\nالقدم المخلبية\n0:46\n92\n25\n4\nعرض المزيد على فيسبوك';
+    const posts = tt333PluginPosts(txt, 'https://www.facebook.com/x', Date.parse('2026-10-08T12:00:00Z')).map(p => [p.date, p.video, p.reactions, p.comments, p.shares]);
+    const pc = tt333PlaceCheck({ statement: 'خدمة أهالي قنا ونجع حمادي' }, [{ url: 'https://www.facebook.com/x', kind: 'source', text: 'قنا, Qena, Egypt\n' + txt }]);
+    return { posts, verdict: pc.verdict, quote: pc.evidence.map(e => e.quote).join(' | ') };
+  });
+  assert.deepEqual(r.posts, [['2026-10-05', false, 406, 27, 113], ['2026-09-16', true, 92, 25, 4]]);
+  assert.equal(r.verdict, 'confirmed'); assert.match(r.quote, /نجع حمادى/);
 });
 
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
