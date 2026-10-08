@@ -570,6 +570,19 @@ await check('sources that could not be read are not shown and do not add limits'
   assert.deepEqual(r.limits, ['لم نقرأ تقييمات مرضى موثقة']);
 });
 
+await check('links keep the Facebook page id; Arabic relative dates in plugin posts; navigation pages are not sources', async () => {
+  const r = await page.evaluate(() => {
+    const links = bp323Links('[fb](https://www.facebook.com/profile.php?id=61553464153608&ref=x) [yt](https://www.youtube.com/watch?v=abc123&t=3)', 'https://afdal.example/');
+    const txt = 'مؤسسة\n٢٦٬٣٥٩ متابعين\nعنوان\nمؤسسة\nمنذ حوالي ‏٩‏ أشهر\nنص البوست\nعرض المزيد\n‏٦‏\nتعليق\nمشاركة\nعنوان تاني\nمؤسسة\nمنذ يومين\nبوست تاني\n12\n3\n1';
+    const posts = tt333PluginPosts(txt, 'https://www.facebook.com/x', Date.parse('2026-10-08')).map(p => [p.date, p.reactions, p.text]);
+    return { links, posts, nav: ['https://www.youtube.com/feed/you', 'https://www.google.com/maps/embed', 'https://www.youtube.com/@x'].map(u => TT333_NAV.test(u)) };
+  });
+  assert.ok(r.links.includes('https://www.facebook.com/profile.php?id=61553464153608'), JSON.stringify(r.links));
+  assert.ok(r.links.includes('https://www.youtube.com/watch?v=abc123'));
+  assert.deepEqual(r.posts, [['2026-01-11', 6, 'نص البوست'], ['2026-10-06', 12, 'بوست تاني']]);
+  assert.deepEqual(r.nav, [true, true, false]);
+});
+
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
 
 await ctx.close();
