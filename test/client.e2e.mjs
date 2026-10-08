@@ -583,6 +583,19 @@ await check('links keep the Facebook page id; Arabic relative dates in plugin po
   assert.deepEqual(r.nav, [true, true, false]);
 });
 
+await check('charity competitors: same cause as the client, donation ads only, no foreign relief; names read from the profile picture', async () => {
+  const r = await page.evaluate(() => {
+    const c = { id: 'chx', name: 'مؤسسة المياه', answers: { businessType: 'مؤسسة خيرية', description: 'توصيل المياه النظيفة للقرى وحفر الآبار ووصلات المياه', offer: 'وصلات مياه' }, digitalAudit: {} };
+    TT333.compClient = c; const ad = (advertiser, text) => ({ id: '1', advertiser, text, status: 'active', start: 1, branches: [] });
+    const v = [ad('مؤسسة إكرام', 'تبرع بوصلة مياه صدقة جارية لقرى مصر'), ad('مركز الأورام', 'تبرع لعلاج مرضى الأورام'), ad('زاد', 'تبرع بشاحنة مياه لأهل غزة'), ad('شركة معالجة', 'حلول تحلية مياه البحر للمصانع'), ad('مؤسسة رسالة', 'اليوميه الاسلامية تبرع لعلاج')].map(a => bp329Eligible(a, bp330Service(''), 'مصر'));
+    const md = 'Library ID: 1544840440680143\n\nStarted running on Jun 30, 2026\n\n* * *\n\n![Image 1: مؤسسة إكرام للتنمية](https://x/y.jpg)\n\nتقدر تتخيل يوم من غير مية؟ تبرع\n\nActive\n';
+    const names = bp329ParseLibrary(md).map(x => x.advertiser); TT333.compClient = null;
+    return { v, service: (TT333.compClient = c, bp330Service('')), names };
+  });
+  assert.deepEqual(r.v, [true, false, false, false, false]); assert.equal(r.service, 'صدقة جارية مياه'); assert.deepEqual(r.names, ['مؤسسة إكرام للتنمية']);
+  await page.evaluate(() => { TT333.compClient = null; });
+});
+
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
 
 await ctx.close();
