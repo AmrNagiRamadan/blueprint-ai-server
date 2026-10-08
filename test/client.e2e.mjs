@@ -539,6 +539,11 @@ await check('Facebook plugin posts become post rows with exact counts; «حما�
   assert.equal(r.verdict, 'confirmed'); assert.match(r.quote, /نجع حمادى/);
 });
 
+await check('institutions named in a claim are checked word for word in the client sources', async () => {
+  const r = await page.evaluate(() => { const st = 'حرص حضرتك على توفير خبرة مستشفى أبو الريش والقصر العيني في جراحة عظام الأطفال'; const docs = [{ url: 'https://www.facebook.com/x', kind: 'source', text: '- دكتوراه جراحة عظام الاطفال - زميل وحدة جراحات عظام الاطفال ، ابو الريش ، القصر العينى' }]; const a = tt333InstitutionCheck({ statement: st }, docs), b = tt333InstitutionCheck({ statement: st }, [{ url: 'x', kind: 'source', text: 'زميل القصر العيني' }]); return [a.verdict, a.evidence.length, b.verdict, b.missing[0]]; });
+  assert.deepEqual(r, ['confirmed', 1, 'partial', 'دليل على ابو الريش']);
+});
+
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
 
 await ctx.close();
