@@ -70,7 +70,7 @@ function fakeNetwork(ctx, net) {
     }
     if (url.startsWith(SERVER + '/api/read')) {
       const body = JSON.parse(req.postData() || '{}');
-      net.read.push(body.url);
+      net.read.push(body.url); net.readBodies = net.readBodies || []; net.readBodies.push(body);
       if (net.mode.plugin && /facebook\.com\/plugin_page_test|instagram\.com\/clinic_ig/.test(body.url)) return json(route, 200, { url: body.url, status: 'read', method: /instagram/.test(body.url) ? 'instagram_preview' : 'facebook_plugin', title: 'عيادة', text: /instagram/.test(body.url) ? 'Clinic (@clinic_ig)\n223 Followers, 316 Following, 45 Posts' : 'عيادة الاختبار\n٨٫١ ألف متابع\n3d\nبوست عن علاج تقوس الساقين\n406\n27', links: [{ url: 'https://www.facebook.com/plugin_page_test/posts/pfbid0abc' }], coverage: 'partial', limitations: ['من إضافة فيسبوك'] });
       if (net.mode.readerOnlyFB) return json(route, 200, { ok: true, url: body.url, title: 'Log in', text: 'Log in', links: [], loginWall: true });
       if (body.url.startsWith(SITE)) return json(route, 200, { ok: true, url: body.url, finalUrl: body.url, title: NAME, text: SITE_TEXT, links: [{ href: FB, text: 'Facebook' }], loginWall: false, dismissed: { clicked: ['Close'], removed: 0 }, html: `<html><head><script>fbq('init','123')</script></head><body>${SITE_TEXT}<a href="${FB}">fb</a></body></html>` });
@@ -542,6 +542,26 @@ await check('Facebook plugin posts become post rows with exact counts; «حما�
 await check('institutions named in a claim are checked word for word in the client sources', async () => {
   const r = await page.evaluate(() => { const st = 'حرص حضرتك على توفير خبرة مستشفى أبو الريش والقصر العيني في جراحة عظام الأطفال'; const docs = [{ url: 'https://www.facebook.com/x', kind: 'source', text: '- دكتوراه جراحة عظام الاطفال - زميل وحدة جراحات عظام الاطفال ، ابو الريش ، القصر العينى' }]; const a = tt333InstitutionCheck({ statement: st }, docs), b = tt333InstitutionCheck({ statement: st }, [{ url: 'x', kind: 'source', text: 'زميل القصر العيني' }]); return [a.verdict, a.evidence.length, b.verdict, b.missing[0]]; });
   assert.deepEqual(r, ['confirmed', 1, 'partial', 'دليل على ابو الريش']);
+});
+
+await check('Instagram reader session: saved from settings, sent only with /api/read', async () => {
+  await page.evaluate(() => { openAISettings(); });
+  await page.waitForTimeout(200);
+  const has = await page.evaluate(() => !!document.getElementById('bpIGSession333'));
+  assert.ok(has, 'settings field');
+  await page.fill('#bpIGSession333', 'sessionid=12345%3Aabcdefghijk; path=/');
+  await page.dispatchEvent('#bpIGSession333', 'input'); await page.dispatchEvent('#bpIGSession333', 'change');
+  const stored = await page.evaluate(() => localStorage.getItem('bp_ig_session'));
+  assert.equal(stored, '12345%3Aabcdefghijk');
+  await page.evaluate(() => closeModal());
+  net.mode.plugin = true; const n = (net.readBodies || []).length, a0 = net.ai.length;
+  const aiBodies = []; page.on('request', r => { if (r.url().startsWith(SERVER + '/api/ai')) aiBodies.push(r.postData() || ''); });
+  await page.evaluate(async () => { TT333.browser.clear(); await bp323Read('https://www.instagram.com/clinic_ig'); await callAI('اكتب تمام فقط.', { maxTokens: 10 }); });
+  net.mode.plugin = false;
+  const bodies = net.readBodies.slice(n);
+  assert.ok(bodies.length && bodies.every(b => b.igSession === '12345%3Aabcdefghijk'), JSON.stringify(bodies));
+  assert.ok(aiBodies.length && aiBodies.every(b => !b.includes('12345%3Aabcdefghijk')), 'never sent to /api/ai');
+  await page.evaluate(() => localStorage.removeItem('bp_ig_session'));
 });
 
 await check('no page errors', async () => { assert.deepEqual(net.errors, []); });
