@@ -656,16 +656,30 @@ footer .tt{font-weight:700;color:var(--teal2)}.by{display:flex;flex-direction:co
 // ---- Competitors from the Meta Ad Library ----
 // The library page read through the reader comes as Markdown (**Sponsored**, [Page name](link), images);
 // the parser expects the plain page text, so advertiser names came back empty and nothing could be selected.
-function tt333LibraryPlain(text){return String(text||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)/g,'$1').replace(/\*\*(Sponsored|ممول)\*\*/gi,'\n$1\n').replace(/\*\*([^*\n]+)\*\*/g,'$1');}
+function tt333LibraryPlain(text){
+ // some result pages carry the advertiser only as the profile picture's alt text, with no «Sponsored» line
+ const blocks=String(text||'').split(/(?=Library ID:)/i).map(b=>/\*\*(?:Sponsored|ممول)\*\*|\n(?:Sponsored|ممول)\n/i.test(b)?b:b.replace(/!\[Image \d+: ([^\]]{2,120})\]\([^)]*\)/,(m,name)=>'\n'+name.trim()+'\nSponsored\n'));
+ return blocks.join('').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)/g,'$1').replace(/\*\*(Sponsored|ممول)\*\*/gi,'\n$1\n').replace(/\*\*([^*\n]+)\*\*/g,'$1');}
 const parseLib333=bp329ParseLibrary;
 bp329ParseLibrary=function(text,at){return parseLib333(/\*\*(?:Sponsored|ممول)\*\*|\]\(https?:/i.test(String(text||''))?tt333LibraryPlain(text):text,at);};
 // The comparison area defaults to the client's own city (قنا), not the whole country.
 // Charities: search the library by what they collect donations for, across the whole country.
 try{if(Array.isArray(BP330_SERVICES)&&!BP330_SERVICES.some(g=>g[0]==='تبرع'))BP330_SERVICES.unshift(['تبرع',['تبرع','تبرعك','صدقه','صدقه جاريه','زكاه','زكاتك','حفر ابار','حفر بئر','بئر','ابار','سقيا','اطعام','كرتونه','كفاله','ايتام','يتيم','خيري','خيريه','جمعيه خيريه','مؤسسه خيريه']]);}catch{}
+// Causes a charity collects for; competitors must collect for the same ones.
+const TT333_CAUSES=[['صدقة جارية مياه',['مياه','سقيا','بئر','ابار','محطه تحليه','محطات تحليه','تحليه','وصلات مياه','وصله مياه','مياه الشرب','مياه نظيفه']],['تبرع اطعام',['اطعام','كرتونه','كراتين','وجبات','وجبه','شنطه رمضان','لحوم','اضاحي']],['تبرع تسقيف منازل',['تسقيف','سقف','اسقف','ترميم','بيوت','منازل','سكن كريم']],['كفالة يتيم',['يتيم','ايتام','كفاله']],['تبرع علاج',['علاج','مرضى','مريض','اورام','حروق','عمليه جراحيه','عمليات','غسيل كلوي']],['تبرع تعليم',['تعليم','مدارس','مدرسه','طلاب','مكفوفين']],['تبرع غارمين',['غارمين','غارمات','سجون']],['اغاثة خارجية',['غزه','فلسطين','السودان','سوريا','لبنان','اليمن']]];
+function tt333Causes(text){const n=' '+bp330Norm(String(text||'')).replace(/[#_،,.!؟?:;()\-]/g,' ').replace(/\s+/g,' ')+' ';const count=w=>{const k=bp330Norm(w);return (n.match(new RegExp('\\s(?:و|ب|ل|ف)?(?:ال|لل)?'+k.replace(/\s+/g,'\\s+')+'(?:ها|هم|نا|ك)?(?=\\s)','g'))||[]).length;};return TT333_CAUSES.map(([label,words])=>[label,words.reduce((k,w)=>k+count(w),0)]).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);}
+function tt333ClientCauses(c){const a=c.answers||{};return tt333Causes([a.description,a.offer,a.usp,a.businessType,a.biz,...toArr(c.creativeStrategy?.angles).filter(x=>x.approved).map(x=>x.angle+' '+(x.motive||''))].map(x=>Array.isArray(x)?x.join(' '):String(x||'')).join(' '));}
+try{for(const [label,words] of TT333_CAUSES)if(!BP330_SERVICES.some(g=>g[0]===label))BP330_SERVICES.unshift([label,words]);}catch{}
+const service333=bp330Service;
+bp330Service=function(description){const c=TT333.compClient;if(c&&tt333DeckKind(c)==='nonprofit'){const cause=bp323State(c).libraryService333||tt333ClientCauses(c)[0];if(cause)return cause;}return service333(description);};
+const TT333_DONATE=/(?:تبرع|اتبرع|صدقه|زكاه|زكاتك|ساهم|ساهمي|الاجر|اجر|ثواب|خير|خيريه|جمعيه|مؤسسه)/;
 const TT333_NATIONWIDE=/^(?:مصر|egypt|كل المحافظات|جميع المحافظات|الجمهوريه|جمهوريه مصر العربيه)$/i;
 const eligible333=bp329Eligible;
-bp329Eligible=function(a,service,region){const r=tt333AN(bp329Norm(String(region||''))).trim();if(TT333_NATIONWIDE.test(r))return eligible333(a,service,'__any__')||(!!a.advertiser&&a.status==='active'&&!!a.start&&!!a.id&&!bp330B2B(a.text)&&bp330ServiceTerms(service).some(x=>bp330Norm(a.advertiser+' '+a.text).includes(x)));return eligible333(a,service,region);};
+bp329Eligible=function(a,service,region){const c=TT333.compClient;if(c&&tt333DeckKind(c)==='nonprofit'){const mine=tt333ClientCauses(c),theirs=tt333Causes(a.advertiser+' '+a.text);if(mine.length&&!(theirs[0]&&mine.includes(theirs[0])))return false;if(theirs.includes('اغاثة خارجية')&&!mine.includes('اغاثة خارجية'))return false;if(!TT333_DONATE.test(bp330Norm(a.advertiser+' '+a.text)))return false;}
+ const r=tt333AN(bp329Norm(String(region||''))).trim();if(TT333_NATIONWIDE.test(r))return eligible333(a,service,'__any__')||(!!a.advertiser&&a.status==='active'&&!!a.start&&!!a.id&&!bp330B2B(a.text)&&bp330ServiceTerms(service).some(x=>bp330Norm(a.advertiser+' '+a.text).includes(x)));return eligible333(a,service,region);};
 const comp333=runCompetitors;
-runCompetitors=async function(cid){const c=getClient(cid);if(c){const s=bp323State(c),geo=String(c.answers?.geo||'');const nationwide=tt333DeckKind(c)==='nonprofit'&&/(?:جميع|كل)\s+المحافظات|مصر كلها|الجمهورية|جمهورية مصر/.test(geo);if(nationwide)s.researchRegion329='مصر';else if(!String(s.researchRegion329||'').trim()){const g=tt333ClientGeo(c);if(g.length)s.researchRegion329=g[0];}}return comp333(cid);};
+runCompetitors=async function(cid){const c=getClient(cid);if(c){TT333.compClient=c;const s=bp323State(c),geo=String(c.answers?.geo||'');
+ // a charity is searched by its main cause; when that changed since the last import, the library is read again
+ if(tt333DeckKind(c)==='nonprofit'){const cause=tt333ClientCauses(c)[0];if(cause){s.libraryService333=cause;if(s.libraryPaste329&&s.libraryPaste329.service!==cause&&c.research?.competitors){c.research.competitors=c.research.competitors.filter(x=>!x.librarySelected329);}}}const nationwide=tt333DeckKind(c)==='nonprofit'&&/(?:جميع|كل)\s+المحافظات|مصر كلها|الجمهورية|جمهورية مصر/.test(geo);if(nationwide)s.researchRegion329='مصر';else if(!String(s.researchRegion329||'').trim()){const g=tt333ClientGeo(c);if(g.length)s.researchRegion329=g[0];}}return comp333(cid);};
 document.title='Techno Team — V3.33';
 try{render();}catch(e){console.error('V3.33 render',e);}
