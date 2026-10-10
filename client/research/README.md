@@ -1,13 +1,9 @@
-# Techno Team research focus V3.34
+# Techno Team initial research V3.35
 
-The root index.html serves the initial research workflow only: presence, platform examination, differences, latest observed content sample, improvement discussion, and missing questions. Campaign planning and execution are not in the active UI.
+Presentation dashboard implementing the approved blue RTL mockup, embedded Cairo fonts, responsive platform cards, content mix and priority controls. No discussion UI or calls; existing historical conversations remain in client backup data.
 
-app.js and style.css are the readable sources; index.html embeds both and Cairo fonts from the previous client version. Keep the root and this index in sync when building.
+Storage namespace remains techno_research_v334. Legacy migration, Meta/history data kept in legacy payload, HTML/JSON import and export retained. V3.34 research backups import natively.
 
-The existing /api/read, /api/search and /api/ai routes are reused without changing provider secrets or models. Protected AI/search routes use X-Blueprint-Token; reader uses its configured Bearer token.
+Confirmed readable accounts are shown in summary; unresolved identities excluded from analysis; unavailable sources in collapsed limitations. Identical field/value facts grouped for review with all evidence; contradictions retained.
 
-Data uses a separate localStorage and IndexedDB namespace. Legacy clients are imported with complete original records retained under legacy. No writes go to the old client namespace. JSON backup and HTML client reports are importable without replacing current clients. No credentials enter the backups.
-
-Content ratios count only reviewed, dated posts with matching quotations and observed direct URLs, grouped by platform, capped at 30 latest observed posts. Partial reads are explicitly labelled. Missing evidence never means no content. Identity candidates require review.
-
-Tests: Chromium end-to-end flow with deterministic API fixtures verified migration, source identity, nonfatal reads, address/market separation, differences, old content sample and denominator, discussion, question suppression, report restore, persistence and mobile width. Additional live reader/OpenAI extraction on LDC accepted six facts with matching quotations and rejected two unmatched quotations; it was not a comprehensive live test of every platform.
+Verified with local Chromium and mock API responses: full research flow, legacy migration, source identity, source failure continuation, geo validation, conflicts, actual sample percentages, question suppression, report restore, save/reload, 4.5-second dismissing toast, dashboard cards and mobile width; no page errors. API/model configuration unchanged. No live AI quality assessment in this UI update.
