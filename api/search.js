@@ -98,6 +98,7 @@ export default async function handler(req, res) {
       }
       attempts.push(r.diag);
       // A completed search without sources is an answer; repeating it with the preview tool doubles the cost.
+      if (!r.sources.length && r.diag.callStatuses.some(s => s === 'completed')) { return res.status(200).json({ output: [{type:'web_search_call',status:'completed',action:{sources:[]}}, {type:'message',content:[{type:'output_text',text:r.text,annotations:[]}]}], searched:true, searchProvider:'openai', empty:true }); }
       if (!r.sources.length) break;
       if (r.sources.length) {
         return res.status(200).json({
@@ -111,10 +112,12 @@ export default async function handler(req, res) {
         });
       }
     }
-    return res.status(422).json({ error: 'SEARCH_SOURCES_MISSING', model, attempts });
+    const failed = attempts.find(x => x.upstreamStatus);
+    return res.status(failed?.upstreamStatus === 429 ? 429 : 502).json({ error: failed ? 'SEARCH_UPSTREAM_FAILED' : 'SEARCH_INCOMPLETE', detail: failed?.message || 'لم تكتمل أداة البحث؛ لا يمكن الحكم على وجود الحساب', model, attempts });
   } catch (e) {
     return res.status(502).json({ error: e.name === 'AbortError' ? 'SEARCH_TIMEOUT' : 'SEARCH_FAILED' });
   } finally {
     clearTimeout(timer);
   }
 }
+
