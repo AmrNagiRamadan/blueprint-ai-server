@@ -69,6 +69,7 @@ async function runSearch(key, model, input, maxTokens, toolType, signal) {
 export default async function handler(req, res) {
   if (guard(req, res)) return;
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Techno-Search-Version', '3.40');
 
   const key = process.env.OPENAI_API_KEY;
   if (!key) return res.status(503).json({ error: 'SEARCH_KEY_MISSING' });
@@ -76,9 +77,15 @@ export default async function handler(req, res) {
   let body;
   try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; }
   catch { return res.status(400).json({ error: 'INVALID_JSON' }); }
-  if (!body || typeof body.input !== 'string' || !body.input.trim() || body.input.length > 12000) {
-    return res.status(400).json({ error: 'INVALID_INPUT' });
+  // Accept known legacy field names, but never silently truncate research context.
+  const input = typeof body?.input === 'string' ? body.input :
+    typeof body?.query === 'string' ? body.query : typeof body?.prompt === 'string' ? body.prompt : '';
+  if (!input.trim() || input.length > 12000) {
+    return res.status(400).json({ error: 'INVALID_INPUT', code: input.length > 12000 ? 'SEARCH_INPUT_TOO_LONG' : 'SEARCH_INPUT_MISSING',
+      detail: input.length > 12000 ? 'طلب البحث أطول من 12000 حرف؛ حدّث الصفحة لاستخدام البحث المختصر.' : 'طلب البحث ناقص: يلزم نص في input. حدّث الصفحة ثم أعد المحاولة.',
+      inputLength: input.length, serverVersion: '3.40' });
   }
+  body = { ...body, input: input.trim() };
 
   const model = searchModel(allowedModels.has(body.model) ? body.model : '');
   const maxTokens = Math.min(5000, Math.max(400, +body.max_output_tokens || 4000));
