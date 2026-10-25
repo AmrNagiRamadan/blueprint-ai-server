@@ -17,3 +17,6 @@
 
 html,body,.shell,main{overflow-anchor:none}
 .identity-signals{font-size:12px;color:var(--muted)}
+
+.deck-complete{margin:0 54px 14px;padding:11px 14px;border:1px solid #9dd7b8;border-radius:12px;background:#eefaf3;color:#11643b;font-weight:800;text-align:center}
+@media(max-width:600px){.deck-complete{margin:0 42px 12px}}
