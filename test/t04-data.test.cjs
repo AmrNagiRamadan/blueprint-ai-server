@@ -16,6 +16,11 @@ class MemoryDriver{
   assert.equal(migrated.clients.length,old.db.clients.length);
   assert.equal(migrated.clients[0].facts.length,old.db.clients[0].facts.length);
   assert.equal(migrated.clients[0].sources.length,old.db.clients[0].sources.length);
+  const old341=JSON.parse(fs.readFileSync('../focus_v341/evidence/live341-client.json','utf8'));
+  const migrated341=T.migrate(old341),valid341=T.validateDocument(migrated341);
+  assert.equal(valid341.ok,true,valid341.errors.join(','));
+  assert.equal(migrated341.clients[0].facts.length,old341.facts.length);
+  assert.equal(migrated341.clients[0].findings.length,old341.findings.length);
 
   let doc=T.emptyDocument();doc.clients=[T.migrate({id:'c1',name:'Test',sources:[{id:'s1',url:'https://example.com',status:'read',identity:'confirmed'}],facts:[{id:'f1',sourceId:'s1',field:'price',value:'300 جنيه',status:'pending',evidence:[{sourceId:'s1',url:'https://example.com',quote:'سعر الكشف 300 جنيه'}]}]}).clients[0]];
   doc=T.setFactDecision(doc,'c1','f1','approved','350 جنيه');
@@ -32,5 +37,5 @@ class MemoryDriver{
   a.fail=false;b.fail=false;result=await store.commit(d=>T.setFactDecision(d,'c1','f1','rejected'));assert.equal(result.ok,true);assert.ok(await a.read('prev'));assert.equal(store.document.clients[0].facts[0].review.status,'rejected');
   const recoveredStore=new T.DataStore([a],{current:'cur','previous':'prev'});a.map.set('cur','{broken');const recovered=await recoveredStore.load();assert.equal(recovered.recoveredFrom,'A');assert.equal(recovered.document.clients[0].facts[0].review.status,'approved');
 
-  console.log(JSON.stringify({passed:true,legacyClients:migrated.clients.length,legacyFacts:migrated.clients[0].facts.length,correctionPreserved:true,evidencePreserved:true,roundtrip:true,totalFailureRollback:true,previousSnapshotRecovery:true}));
+  console.log(JSON.stringify({passed:true,legacyV339Clients:migrated.clients.length,legacyV339Facts:migrated.clients[0].facts.length,legacyV341Facts:migrated341.clients[0].facts.length,legacyV341Findings:migrated341.clients[0].findings.length,correctionPreserved:true,evidencePreserved:true,roundtrip:true,totalFailureRollback:true,previousSnapshotRecovery:true}));
 })().catch(e=>{console.error(e);process.exit(1)});
