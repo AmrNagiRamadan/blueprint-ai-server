@@ -114,7 +114,7 @@
       identity:{displayName:text(old&&old.name)||'عميل بدون اسم',officialName:text(old&&old.officialName)||'',specialty:text(old&&old.specialty),status:'draft'},
       inputs:{links:arr(old&&old.links).flatMap(v=>text(v).split(/\s+/)).filter(Boolean),notes:text(old&&old.notes),answers:clone(old&&old.answers)||{}},
       sources,evidence,facts,findings,
-      questions:[],decisions,contentSamples:[],competitorSelection:normalizeCompetitorSelection({}),
+      questions:[],decisions,contentSamples:[],competitorSelection:normalizeCompetitorSelection({}),competitorStudy:normalizeCompetitorStudy({}),
       report:clone(old&&old.report)||{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null},
       revisions:{data:Number(old&&old.revision)||0,review:decisions.length,report:0},
       createdAt:old&&old.created||nowISO(),updatedAt:old&&old.updated||nowISO(),
@@ -123,7 +123,7 @@
   }
   function normalizeCanonicalClient(c){
     const base=migrateClient({id:c.id,name:c.identity&&c.identity.displayName,specialty:c.identity&&c.identity.specialty,links:c.inputs&&c.inputs.links,notes:c.inputs&&c.inputs.notes,created:c.createdAt,updated:c.updatedAt},'canonical');
-    return{...base,...clone(c),identity:{...base.identity,...clone(c.identity)},inputs:{...base.inputs,...clone(c.inputs)},sources:arr(c.sources).map(s=>s&&s.read?clone(s):normalizeSource(s,c.id)),evidence:arr(c.evidence).map(e=>cleanEvidence(e,e&&e.sourceId)),facts:arr(c.facts).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),findings:arr(c.findings).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),questions:arr(c.questions),decisions:arr(c.decisions),contentSamples:arr(c.contentSamples).map(normalizeContentSample),competitorSelection:normalizeCompetitorSelection(c.competitorSelection),report:{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null,...clone(c.report)},revisions:{data:0,review:0,report:0,...clone(c.revisions)},legacy:clone(c.legacy)||{sourceVersion:'canonical',unmapped:{}}};
+    return{...base,...clone(c),identity:{...base.identity,...clone(c.identity)},inputs:{...base.inputs,...clone(c.inputs)},sources:arr(c.sources).map(s=>s&&s.read?clone(s):normalizeSource(s,c.id)),evidence:arr(c.evidence).map(e=>cleanEvidence(e,e&&e.sourceId)),facts:arr(c.facts).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),findings:arr(c.findings).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),questions:arr(c.questions),decisions:arr(c.decisions),contentSamples:arr(c.contentSamples).map(normalizeContentSample),competitorSelection:normalizeCompetitorSelection(c.competitorSelection),competitorStudy:normalizeCompetitorStudy(c.competitorStudy),report:{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null,...clone(c.report)},revisions:{data:0,review:0,report:0,...clone(c.revisions)},legacy:clone(c.legacy)||{sourceVersion:'canonical',unmapped:{}}};
   }
   function normalizeDocument(input){
     if(input&&input.format===FORMAT&&Number(input.schemaVersion)===SCHEMA_VERSION){const d=clone(input);d.clients=arr(d.clients).map(normalizeCanonicalClient);d.revision=Number(d.revision)||0;d.extensions=clone(d.extensions)||{};return d}
@@ -333,6 +333,69 @@
     const approved=candidates.filter(c=>c.review.status==='approved'),pending=candidates.filter(c=>c.review.status==='pending'),limits=[...selection.limits];if(!context.service)limits.push('الخدمة غير محددة؛ لا يمكن تقييم تشابه المنافسين.');if(!context.region)limits.push('المنطقة غير محددة؛ لا يمكن تقييم المنافسة المحلية.');if(approved.length<3)limits.push('القائمة القصيرة أقل من 3 منافسين معتمدين.');return{context,candidates,approved,pending,limits:Array.from(new Set(limits)),complete:approved.length>=3&&approved.length<=5};
   }
 
+
+  const COMPETITOR_FINDING_SECTIONS={positioning:'التموضع والرسالة',offer:'العرض والأسعار',booking:'الحجز ومسار التحويل',content:'محتوى منشور'};
+  const AD_LIBRARY_PLATFORMS=['Meta','Google','TikTok'];
+  function normalizeLibraryCheck(raw={}){
+    const status=['not_checked','verified','unverified'].includes(raw.status)?raw.status:'not_checked';
+    return{status,reason:text(raw.reason),libraryUrl:canonicalURL(raw.libraryUrl),updatedAt:raw.updatedAt||null};
+  }
+  function normalizeCompetitorFinding(raw={},competitorId=''){
+    const section=COMPETITOR_FINDING_SECTIONS[raw.section]?raw.section:'content';
+    return{id:text(raw.id)||id('comp_finding',competitorId+'|'+section+'|'+norm(raw.title||raw.value)+'|'+canonicalURL(raw.sourceUrl)),competitorId:text(raw.competitorId)||competitorId,section,title:text(raw.title),value:text(raw.value||raw.observation),quote:text(raw.quote||raw.evidence),sourceUrl:canonicalURL(raw.sourceUrl||raw.url),sourceKind:text(raw.sourceKind)||'source',observedAt:raw.observedAt||null,createdAt:raw.createdAt||null};
+  }
+  function normalizeCompetitorAd(raw={},competitorId=''){
+    const libraryId=text(raw.libraryId).replace(/[^\p{L}\p{N}_-]/gu,''),platform=AD_LIBRARY_PLATFORMS.includes(raw.platform)?raw.platform:'Meta';
+    return{id:text(raw.id)||id('comp_ad',competitorId+'|'+platform+'|'+libraryId),competitorId:text(raw.competitorId)||competitorId,platform,libraryId,advertiser:text(raw.advertiser),status:/inactive|غير نشط|متوقف/i.test(text(raw.status))?'inactive':'active',startDate:text(raw.startDate),daysActive:Number.isFinite(Number(raw.daysActive))?Number(raw.daysActive):null,ageBand:['red','orange','yellow','unknown'].includes(raw.ageBand)?raw.ageBand:'unknown',format:text(raw.format)||'غير محدد',cta:text(raw.cta),copies:Math.max(1,Number(raw.copies)||1),text:text(raw.text),branches:arr(raw.branches).map(text).filter(Boolean),adUrl:canonicalURL(raw.adUrl),libraryUrl:canonicalURL(raw.libraryUrl),source:'library_paste',observedAt:raw.observedAt||null};
+  }
+  function normalizeCompetitorStudyItem(raw={}){
+    const competitorId=text(raw.competitorId);const checks={};for(const p of AD_LIBRARY_PLATFORMS)checks[p]=normalizeLibraryCheck(raw.libraryChecks&&raw.libraryChecks[p]);
+    return{competitorId,findings:arr(raw.findings).map(x=>normalizeCompetitorFinding(x,competitorId)).filter(x=>x.sourceUrl&&x.quote),ads:arr(raw.ads).map(x=>normalizeCompetitorAd(x,competitorId)).filter(x=>x.libraryId),libraryChecks:checks,updatedAt:raw.updatedAt||null};
+  }
+  function normalizeCompetitorStudy(raw={}){return{studies:arr(raw.studies).map(normalizeCompetitorStudyItem).filter(x=>x.competitorId),updatedAt:raw.updatedAt||null}}
+  function studyForClient(client,competitorId,create=false){client.competitorStudy=normalizeCompetitorStudy(client.competitorStudy);let study=client.competitorStudy.studies.find(x=>x.competitorId===competitorId);if(!study&&create){study=normalizeCompetitorStudyItem({competitorId});client.competitorStudy.studies.push(study)}return study}
+  function normalizeDigits(value){return String(value||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}
+  function parseLibraryDate(raw){const s=normalizeDigits(raw),m=s.match(/((?:19|20)\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})|(\d{1,2})[-\/.](\d{1,2})[-\/.]((?:19|20)\d{2})/);if(!m)return'';const y=Number(m[1]||m[6]),mo=Number(m[2]||m[5]),d=Number(m[3]||m[4]),dt=new Date(Date.UTC(y,mo-1,d));return dt.getUTCFullYear()===y&&dt.getUTCMonth()===mo-1&&dt.getUTCDate()===d?dt.toISOString().slice(0,10):''}
+  function adAge(startDate,asOf){if(!startDate)return{daysActive:null,ageBand:'unknown'};const end=parseLibraryDate(asOf)||nowISO().slice(0,10),days=Math.max(0,Math.floor((Date.parse(end+'T00:00:00Z')-Date.parse(startDate+'T00:00:00Z'))/86400000));return{daysActive:days,ageBand:days>30?'red':days>=15?'orange':'yellow'}}
+  function isAdMetaLine(line){return /^(?:معرف المكتبه|معرف المكتبة|library id|بدأ التشغيل|بدا التشغيل|started running on|نشط|active|غير نشط|inactive|ممول|مُموَّل|sponsored|يستخدم \d+|uses? \d+|تمويل هذا الاعلان|this ad has)/i.test(norm(line))}
+  function extractCTA(block){const options=['إرسال رسالة على واتساب','الحصول على العرض','تقديم طلب الآن','اتصل الآن','إرسال رسالة','اعرف المزيد','Send Message','Get Offer','Apply Now','Sign Up','Call Now','Get Quote','Learn More'];return options.find(x=>block.toLowerCase().includes(x.toLowerCase()))||''}
+  function parseAdLibraryPaste(value,options={}){
+    const raw=normalizeDigits(value),lines=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),idRows=[];
+    lines.forEach((line,index)=>{const m=line.match(/(?:معرف\s*المكتبة|معرف\s*المكتبه|Library\s*ID)\s*[:：#-]?\s*([A-Za-z0-9_-]+)/i);if(m)idRows.push({index,libraryId:m[1]})});
+    if(!idRows.length)return{ads:[],status:'unverified',reason:'النص لا يحتوي على Library ID؛ لا يمكن إثبات وجود أو عدم وجود إعلانات.'};
+    const ads=[];
+    idRows.forEach((row,n)=>{
+      const prev=n?idRows[n-1].index:-1,next=n+1<idRows.length?idRows[n+1].index:lines.length;let sponsor=-1;
+      for(let i=row.index-1;i>prev;i--)if(/ممول|مُموَّل|sponsored/i.test(norm(lines[i]))){sponsor=i;break}
+      const start=Math.max(prev+1,sponsor>=0?sponsor-3:row.index-5),end=next,blockLines=lines.slice(start,end),block=blockLines.join('\n');
+      let advertiser='';if(sponsor>=0){for(let i=sponsor-1;i>=start;i--){const l=lines[i];if(!isAdMetaLine(l)&&!/^\d[:：]\d\d/.test(l)){advertiser=l;break}}}
+      if(!advertiser)advertiser=blockLines.find(l=>!isAdMetaLine(l)&&l.length>2)||'';
+      const dateLine=blockLines.find(l=>/بدأ التشغيل|بدا التشغيل|started running on/i.test(norm(l)))||'',startDate=parseLibraryDate(dateLine),age=adAge(startDate,options.asOf),copiesLine=blockLines.find(l=>/يستخدم\s+\d+\s+اعلان|uses?\s+\d+\s+ads?/i.test(norm(l)))||'',copies=Number(normalizeDigits(copiesLine).match(/\d+/)?.[0])||1;
+      const branches=blockLines.filter(l=>/(?:عنوان|فرع|address|branch)\s*[:：-]?/i.test(l)).map(l=>l.replace(/^(?:عنوان(?:نا)?|فرع(?:نا)?|address|branch)\s*[:：-]?\s*/i,'')).filter(Boolean);
+      const urlLine=blockLines.find(l=>/https?:\/\//i.test(l))||'',url=urlLine.match(/https?:\/\/\S+/i)?.[0]||'',cta=extractCTA(block),format=/\b\d{1,2}:\d{2}\s*\/\s*\d{1,2}:\d{2}\b|\bvideo\b|\breel\b|فيديو|ريل/i.test(block)?'فيديو':/carousel|كاروسيل/i.test(block)?'كاروسيل':/صوره|صورة|image|photo/i.test(block)?'صورة':'غير محدد';
+      const body=blockLines.filter((l,i)=>!isAdMetaLine(l)&&l!==advertiser&&l!==urlLine&&l!==cta&&!branches.includes(l)&&!(sponsor>=0&&start+i===sponsor)).join(' ').replace(/\s+/g,' ').trim();
+      ads.push(normalizeCompetitorAd({competitorId:options.competitorId,platform:options.platform,libraryId:row.libraryId,advertiser,status:/غير نشط|inactive/i.test(block)?'inactive':'active',startDate,...age,format,cta,copies,text:body,branches,adUrl:url,libraryUrl:options.libraryUrl,observedAt:options.observedAt||nowISO()},options.competitorId));
+    });
+    return{ads,status:'verified',reason:'تم استخراج '+ads.length+' إعلان موثق بمعرف مكتبة.'};
+  }
+  function addCompetitorFinding(doc,clientId,competitorId,raw={}){
+    if(!COMPETITOR_FINDING_SECTIONS[raw.section]||raw.section==='ads')throw Error('الإعلانات تُسجل من مكتبة إعلانات وبـ Library ID فقط');
+    const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');const competitor=normalizeCompetitorSelection(client.competitorSelection).candidates.find(x=>x.id===competitorId&&x.review.status==='approved');if(!competitor)throw Error('اعتمد المنافس أولًا');
+    const finding=normalizeCompetitorFinding({...raw,competitorId,createdAt:nowISO()},competitorId);if(!finding.title||!finding.value||!finding.quote||!finding.sourceUrl)throw Error('العنوان والخلاصة والاقتباس ورابط المصدر مطلوبة');const study=studyForClient(client,competitorId,true),i=study.findings.findIndex(x=>x.id===finding.id);if(i>=0)study.findings[i]=finding;else study.findings.push(finding);study.updatedAt=nowISO();client.competitorStudy.updatedAt=study.updatedAt;client.updatedAt=study.updatedAt;client.revisions.data=(Number(client.revisions.data)||0)+1;return next;
+  }
+  function applyCompetitorAdPaste(doc,clientId,competitorId,platform,value,options={}){
+    if(!AD_LIBRARY_PLATFORMS.includes(platform))throw Error('مكتبة الإعلانات غير مدعومة');const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');const competitor=normalizeCompetitorSelection(client.competitorSelection).candidates.find(x=>x.id===competitorId&&x.review.status==='approved');if(!competitor)throw Error('اعتمد المنافس أولًا');const study=studyForClient(client,competitorId,true),parsed=parseAdLibraryPaste(value,{...options,platform,competitorId}),at=nowISO();
+    if(parsed.ads.length){const byId=new Map(study.ads.map(a=>[a.platform+'|'+a.libraryId,a]));parsed.ads.forEach(a=>byId.set(a.platform+'|'+a.libraryId,a));study.ads=[...byId.values()];study.libraryChecks[platform]={status:'verified',reason:parsed.reason,libraryUrl:canonicalURL(options.libraryUrl),updatedAt:at}}
+    else study.libraryChecks[platform]={status:'unverified',reason:parsed.reason,libraryUrl:canonicalURL(options.libraryUrl)||study.libraryChecks[platform].libraryUrl,updatedAt:at};
+    study.updatedAt=at;client.competitorStudy.updatedAt=at;client.updatedAt=at;client.revisions.data=(Number(client.revisions.data)||0)+1;return{document:next,parsed};
+  }
+  function setCompetitorLibraryUnverified(doc,clientId,competitorId,platform,reason,libraryUrl=''){
+    if(!AD_LIBRARY_PLATFORMS.includes(platform))throw Error('مكتبة الإعلانات غير مدعومة');const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');const study=studyForClient(client,competitorId,true),at=nowISO();study.libraryChecks[platform]={status:'unverified',reason:text(reason)||'تعذرت قراءة مكتبة الإعلانات؛ وجود الإعلانات غير محسوم.',libraryUrl:canonicalURL(libraryUrl)||study.libraryChecks[platform].libraryUrl,updatedAt:at};study.updatedAt=at;client.competitorStudy.updatedAt=at;client.updatedAt=at;return next;
+  }
+  function buildCompetitorStudy(client){
+    const approved=buildCompetitorSelection(client).approved,study=normalizeCompetitorStudy(client&&client.competitorStudy),rows=approved.map(competitor=>{const record=study.studies.find(x=>x.competitorId===competitor.id)||normalizeCompetitorStudyItem({competitorId:competitor.id}),sections={};for(const key of Object.keys(COMPETITOR_FINDING_SECTIONS))sections[key]=record.findings.filter(x=>x.section===key);const ads=record.ads.filter(x=>x.libraryId).sort((a,b)=>(a.startDate||'9999').localeCompare(b.startDate||'9999'));const limits=[];for(const p of AD_LIBRARY_PLATFORMS){const ch=record.libraryChecks[p];if(ch.status==='unverified')limits.push(p+': '+ch.reason);else if(ch.status==='not_checked')limits.push(p+': لم تُفحص المكتبة بعد.')}return{competitor,sections,ads,libraryChecks:record.libraryChecks,limits}});return{rows,approvedCount:approved.length,totalAds:rows.reduce((n,x)=>n+x.ads.length,0),complete:approved.length>=3,updatedAt:study.updatedAt};
+  }
+
   function createLocalStorageDriver(storage){return{name:'localStorage',async read(k){return storage.getItem(k)},async write(k,v){storage.setItem(k,v)},async remove(k){storage.removeItem(k)}}}
   function createIndexedDBDriver(indexedDB,name='TechnoTeamRebuildT04'){
     function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore('snapshots');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error||Error('IndexedDB failed'))})}
@@ -346,5 +409,5 @@
     async replace(input){const migrated=normalizeDocument(input);return this.commit(()=>migrated)}
     export(){const doc=normalizeDocument(this.document||emptyDocument());return JSON.stringify({...doc,exportedAt:nowISO()},null,2)}
   }
-  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,FACT_LABELS,CONTENT_TYPES,CONTENT_FORMATS,SOCIAL_PLATFORMS,COMPETITOR_SOURCE_TYPES,factLabel,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,extractFactCandidatesFromSource,validateFactCandidate,applyFactExtraction,factsEquivalent,buildFactGroups,setFactGroupDecision,buildFactComparisons,resolveFactComparison,normalizeContentPost,parseContentPaste,setContentSample,setContentPostType,buildContentAnalysis,competitorSourceType,normalizeCompetitorCandidate,normalizeCompetitorSelection,competitorSearchContext,evaluateCompetitorCandidate,setCompetitorSearchContext,applyCompetitorCandidates,updateCompetitorCandidate,setCompetitorDecision,parseCompetitorPaste,buildCompetitorSelection,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
+  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,FACT_LABELS,CONTENT_TYPES,CONTENT_FORMATS,SOCIAL_PLATFORMS,COMPETITOR_SOURCE_TYPES,COMPETITOR_FINDING_SECTIONS,AD_LIBRARY_PLATFORMS,factLabel,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,extractFactCandidatesFromSource,validateFactCandidate,applyFactExtraction,factsEquivalent,buildFactGroups,setFactGroupDecision,buildFactComparisons,resolveFactComparison,normalizeContentPost,parseContentPaste,setContentSample,setContentPostType,buildContentAnalysis,competitorSourceType,normalizeCompetitorCandidate,normalizeCompetitorSelection,competitorSearchContext,evaluateCompetitorCandidate,setCompetitorSearchContext,applyCompetitorCandidates,updateCompetitorCandidate,setCompetitorDecision,parseCompetitorPaste,buildCompetitorSelection,normalizeCompetitorStudy,parseAdLibraryPaste,addCompetitorFinding,applyCompetitorAdPaste,setCompetitorLibraryUnverified,buildCompetitorStudy,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
 });
