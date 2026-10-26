@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict');const {chromium:pw}=require('playwright-core');const chromium=require('@sparticuz/chromium').default;
+const assert=require('node:assert/strict');const {chromium:pw}=require('playwright-core');process.getuid=()=>1000;const chromium=require('@sparticuz/chromium').default;
 (async()=>{const browser=await pw.launch({executablePath:await chromium.executablePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});const context=await browser.newContext({viewport:{width:390,height:844}});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.goto('http://127.0.0.1:4178/t11-review/',{waitUntil:'networkidle'});await page.click('#loadDemo');await page.waitForFunction(()=>document.querySelector('h2')?.textContent.includes('عينة T11'));
 assert.equal(await page.locator('.candidate').count(),6,'six sample candidates shown');assert.equal(await page.locator('.candidate .badge.strong').count(),3,'three strong candidates');
 for(let i=0;i<3;i++){const b=page.locator('.approve:not([disabled])').first();await b.click();await page.waitForTimeout(60)}
