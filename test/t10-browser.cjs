@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 const {chromium:pw}=require('playwright-core');
-const chromium=require('@sparticuz/chromium');
+const chromium=require('@sparticuz/chromium').default;
 (async()=>{
  const browser=await pw.launch({executablePath:await chromium.executablePath(),headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
  const context=await browser.newContext({viewport:{width:390,height:844}});
