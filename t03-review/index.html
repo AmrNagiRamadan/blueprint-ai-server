@@ -129,8 +129,8 @@ https://facebook.com/example</textarea><small class="helper">موقع أو حس�
     function showSlide(i){slideIndex=Math.max(0,Math.min(11,i));renderReport();$('.report-slide.active')?.scrollIntoView({behavior:'smooth',block:'start'})}
     $('#clientForm').onsubmit=e=>{e.preventDefault();if(!$('#clientName').value.trim()||!$('#links').value.trim())return toast('الاسم ورابط واحد على الأقل مطلوبين.');setStage(1,true);renderReview();toast('دي دراسة تجريبية جاهزة للمراجعة — مفيش AI اتشغّل.')};
     $$('.stage-btn').forEach(b=>b.onclick=()=>setStage(+b.dataset.stage));$('#reviewPrev').onclick=()=>{reviewIndex--;renderReview()};$('#reviewNext').onclick=()=>{reviewIndex++;renderReview()};$('#saveAnswer').onclick=()=>{answer=$('#answer').value.trim();savePreview();toast(answer?'اتحفظت الإجابة ومش هنسأل عنها تاني.':'مفيش إجابة اتحفظت.')};$('#buildReport').onclick=()=>{setStage(2);renderReport()};$('#backReview').onclick=()=>setStage(1,true);$('#slidePrev').onclick=()=>showSlide(slideIndex-1);$('#slideNext').onclick=()=>showSlide(slideIndex+1);$('#reportNav').onclick=e=>{const b=e.target.closest('.report-link');if(b)showSlide(+b.dataset.i)};$$('[data-scenario]').forEach(b=>b.onclick=()=>{$$('[data-scenario]').forEach(x=>x.classList.toggle('active',x===b));$('#reportShell').classList.toggle('limited',b.dataset.scenario==='limited')});
-    try{const saved=JSON.parse(sessionStorage.getItem('tt_t03_preview'));if(saved){decisions=saved.decisions||{};answer=saved.answer||'';reviewIndex=Math.min(saved.reviewIndex||0,2);slideIndex=Math.min(saved.slideIndex||0,11);$('#answer').value=answer}}catch{}
-    renderReview();renderReport();
+    try{const saved=JSON.parse(sessionStorage.getItem('tt_t03_preview'));if(saved){appStage=Math.min(saved.appStage||0,2);decisions=saved.decisions||{};answer=saved.answer||'';reviewIndex=Math.min(saved.reviewIndex||0,2);slideIndex=Math.min(saved.slideIndex||0,11);$('#answer').value=answer}}catch{}
+    renderReview();renderReport();setStage(appStage,true);
   </script>
 </body>
 </html>
