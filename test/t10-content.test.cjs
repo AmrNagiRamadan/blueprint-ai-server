@@ -1,5 +1,5 @@
-const assert=require('node:assert/strict');
-const T=require('../t04-review/data-model.js');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const box={module:{exports:{}},exports:{}};vm.createContext(box);vm.runInContext(fs.readFileSync(path.join(__dirname,'../t04-review/data-model.js'),'utf8'),box);const T=box.module.exports;
 function source(id,platform,url){return{id,url,canonicalUrl:url,platform,identity:{status:'confirmed'},read:{status:'read',title:platform+' test',observedAt:'2026-10-26T12:00:00.000Z'},content:{text:'sample',hash:T.hash('sample')},links:[],legacy:{}}}
 let doc=T.emptyDocument();
 doc.clients.push({id:'c1',identity:{displayName:'عيادة T10',specialty:'أسنان'},inputs:{links:[],answers:{}},sources:[source('fb','Facebook','https://facebook.com/test'),source('ig','Instagram','https://instagram.com/test'),source('yt','YouTube','https://youtube.com/@test')],evidence:[],facts:[],findings:[],questions:[],decisions:[],contentSamples:[],report:{},revisions:{data:0,review:0,report:0},createdAt:'2026-10-26T12:00:00.000Z',updatedAt:'2026-10-26T12:00:00.000Z',legacy:{sourceVersion:'test',unmapped:{}}});
