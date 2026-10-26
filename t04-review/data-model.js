@@ -78,7 +78,7 @@
   function unknownKeys(obj,known){const out={};Object.keys(obj||{}).forEach(k=>{if(!known.includes(k))out[k]=clone(obj[k])});return out}
   function cleanEvidence(e,sourceId){
     const quote=text(e&&e.quote);const url=canonicalURL(e&&e.url);const sid=text(e&&e.sourceId)||sourceId||'';
-    return {id:text(e&&e.id)||id('ev',`${sid}|${url}|${norm(quote)}`),sourceId:sid,url,quote,kind:text(e&&e.kind)||'web',observedAt:e&&e.observedAt||e&&e.at||null};
+    return {id:text(e&&e.id)||id('ev',`${sid}|${url}|${norm(quote)}`),sourceId:sid,url,quote,kind:text(e&&e.kind)||'web',scope:text(e&&e.scope)||'client',observedAt:e&&e.observedAt||e&&e.at||null,publishedAt:e&&e.publishedAt||null};
   }
   function emptyDocument(){return{format:FORMAT,schemaVersion:SCHEMA_VERSION,appVersion:'rebuild-t04',revision:0,createdAt:nowISO(),updatedAt:nowISO(),clients:[],extensions:{}}}
   function normalizeSource(s,clientId){
@@ -149,6 +149,47 @@
     arr(candidate.evidence).forEach(raw=>{const e=cleanEvidence(raw,text(candidate.sourceId));const existing=c.evidence.find(x=>x.id===e.id||`${x.sourceId}|${x.url}|${norm(x.quote)}`===`${e.sourceId}|${e.url}|${norm(e.quote)}`);if(existing)evidenceIds.push(existing.id);else{c.evidence.push(e);evidenceIds.push(e.id)}});
     if(f){f.observedValue=text(candidate.observedValue||candidate.value);f.displayValue=text(candidate.displayValue)||f.observedValue;f.evidenceIds=Array.from(new Set([...arr(f.evidenceIds),...evidenceIds]));f.sourceIds=Array.from(new Set([...arr(f.sourceIds),text(candidate.sourceId)].filter(Boolean)))}else{f={id:text(candidate.id)||id('fact',`${c.id}|${semanticKey}`),semanticKey,field:text(candidate.field)||'fact',scope:text(candidate.scope)||'client',observedValue:text(candidate.observedValue||candidate.value),displayValue:text(candidate.displayValue)||text(candidate.observedValue||candidate.value),origin:text(candidate.origin)||'source',sourceIds:[text(candidate.sourceId)].filter(Boolean),evidenceIds,review:{status:'pending',teamCorrection:null,updatedAt:null},legacy:{}};c.facts.push(f)}c.revisions.data=(Number(c.revisions.data)||0)+1;return next;
   }
+
+  const FACT_LABELS={official_name:'الاسم الرسمي',specialty:'التخصص',address:'العنوان',phone:'رقم التواصل',platform_phone:'رقم منصة الحجز',email:'البريد الإلكتروني',price:'السعر المعلن',rating:'التقييم المعلن',reviews_count:'عدد التقييمات',followers:'عدد المتابعين',founded_year:'سنة التأسيس',last_review_date:'آخر تقييم مقروء',service:'خدمة معلنة',booking_method:'طريقة الحجز'};
+  function factLabel(field){return FACT_LABELS[field]||text(field)||'معلومة'}
+  function normalizeDigits(value){return String(value==null?'':value).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d))}
+  function sourceHost(source){try{return new URL(canonicalURL(source&&source.url)).hostname.replace(/^www\./,'')}catch{return''}}
+  function bookingSource(source){return source&&source.platform==='منصة حجز'||/vezeeta|dacttra|clinido|ekshef|doctorak|doctoorum|tabibi/.test(sourceHost(source))}
+  function templateLineIndexes(lines){const hits=new Set(),signal=/lorem ipsum|dummy (?:text|content)|sample (?:text|patient|review)|demo (?:text|content)|visit our new store|new collection|woman dress|purchase now|bay shore|themeforest|قالب تجريبي|محتوى تجريبي|نص تجريبي/i;lines.forEach((line,i)=>{if(signal.test(line))for(let j=i;j<=Math.min(lines.length-1,i+2);j++)hits.add(j)});return hits}
+  function quoteScope(line){const s=norm(line);if(/تقييم|مراجعه|review|reviewed|patient review|راي مريض/.test(s))return'review';if(/اعلان|sponsored|library id|ممول/.test(s))return'ad';return'client'}
+  function candidate(field,value,line,source,extra={}){const scope=text(extra.scope)||quoteScope(line);return{field,scope,observedValue:text(value),displayValue:text(extra.displayValue)||text(value),origin:'deterministic_extraction',sourceId:source.id,semanticKey:`${field}|${scope}|${hash(norm(value))}`,evidence:[{sourceId:source.id,url:source.url,quote:text(line),kind:'web',scope,observedAt:source.read&&source.read.observedAt||null,publishedAt:extra.publishedAt||null}],meta:clone(extra.meta)||{}}}
+  function extractFactCandidatesFromSource(source,client={}){
+    if(!source||source.identity?.status!=='confirmed'||source.read?.status!=='read')return{candidates:[],rejected:[],skipped:'المصدر غير مقروء أو غير مؤكد'};
+    const body=text(source.content&&source.content.text),lines=body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),template=templateLineIndexes(lines),candidates=[],rejected=[];if(!body)return{candidates,rejected,skipped:'المصدر لا يحتوي نصًا'};
+    const seen=new Set(),push=(item,i)=>{if(!item||!item.observedValue)return;const key=`${item.field}|${item.scope}|${norm(item.observedValue)}`;if(seen.has(key))return;if(template.has(i)){rejected.push({field:item.field,value:item.observedValue,quote:lines[i],reason:'المعلومة ظهرت داخل محتوى قالب أو بيانات تجريبية، فلم تُنسب للعميل.'});return}seen.add(key);candidates.push(item)};
+    lines.forEach((raw,i)=>{const line=normalizeDigits(raw),low=norm(line),isReview=/تقييم|مراجعه|review|reviewed|راي مريض/.test(low);
+      const named=/^(?:الاسم الرسمي|اسم (?:الطبيب|الدكتور|النشاط)|official name)\s*[:：-]\s*(.{3,100})$/i.exec(line);if(named)push(candidate('official_name',named[1],raw,source),i);
+      const specialty=/^(?:التخصص|التخصصات|specialty|specialities?)\s*[:：-]\s*(.{3,140})$/i.exec(line);if(specialty)push(candidate('specialty',specialty[1],raw,source),i);
+      const email=line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);if(email)push(candidate('email',email[0],raw,source),i);
+      const phones=line.match(/(?:\+?\d[\d\s().-]{7,}\d)/g)||[];if(/خط ساخن|hotline|اتصل|call|حجز|booking/i.test(line)){const short=line.match(/\b\d{4,6}\b/g)||[];phones.push(...short)}for(const p0 of phones){const p=p0.replace(/\s+/g,' ').trim();if(/^\d{4,6}$/.test(p)&&!/خط ساخن|hotline|اتصل|call|حجز|booking/i.test(line))continue;if(bookingSource(source)&&!/رقم (?:العياده|المركز|الطبيب)|clinic (?:phone|number)|doctor (?:phone|number)/i.test(line))push(candidate('platform_phone',p,raw,source,{scope:'platform',displayValue:`رقم خدمة ${source.platform}: ${p}`}),i);else push(candidate('phone',p,raw,source),i)}
+      const rating=line.match(/(?:تقييم\s*)?([0-5](?:\.\d+)?)\s*(?:\/|من)\s*5/i);if(rating){push(candidate('rating',`${rating[1]} من 5`,raw,source,{scope:`platform:${source.platform}`}),i);const count=line.match(/(\d[\d,]*)\s*(?:تقييم|مراجعه|review)/i);if(count)push(candidate('reviews_count',count[1].replace(/,/g,''),raw,source,{scope:`platform:${source.platform}`}),i)}
+      const followers=line.match(/(\d[\d,.]*)\s*(?:متابع|followers?)/i);if(followers)push(candidate('followers',followers[1],raw,source,{scope:`platform:${source.platform}`}),i);
+      const price=line.match(/(?:الكشف|سعر|price|consultation)[^\d]{0,25}(\d[\d,.]*)\s*(?:جنيه|ج\.?|egp)/i);if(price)push(candidate('price',`${price[1]} جنيه`,raw,source),i);
+      const year=line.match(/(?:منذ|تاسس|تأسس|established|founded|since)\D{0,12}((?:19|20)\d{2})/i);if(year)push(candidate('founded_year',year[1],raw,source),i);
+      const date=line.match(/\b((?:19|20)\d{2}[-\/.]\d{1,2}[-\/.]\d{1,2}|\d{1,2}[-\/.]\d{1,2}[-\/.](?:19|20)\d{2})\b/);if(date&&isReview)push(candidate('last_review_date',date[1],raw,source,{scope:'review',displayValue:`آخر تقييم مقروء: ${date[1]}`,publishedAt:date[1]}),i);
+      const addressSignal=/(?:شارع|ش\.|ميدان|طريق|عماره|برج|مول|\bstreet\b|\bst\.|\broad\b|\brd\.|\bavenue\b|\bave\.|\bsquare\b)/i;if(addressSignal.test(line)&&/\d/.test(line)){push(candidate('address',raw,raw,source),i)}
+      const booking=/الحجز\s+(?:عن طريق|من خلال|عبر)\s+(.{3,80})/i.exec(line);if(booking)push(candidate('booking_method',booking[1].replace(/[.،]$/,''),raw,source),i);
+      const service=/^(?:الخدمات?|services?)\s*[:：-]\s*(.{3,180})$/i.exec(line);if(service)service[1].split(/[،,|]/).map(x=>x.trim()).filter(Boolean).slice(0,8).forEach(v=>push(candidate('service',v,raw,source),i));
+    });
+    return{candidates,rejected,skipped:'',fingerprint:hash(body)};
+  }
+  function validateFactCandidate(client,source,raw){
+    const value=text(raw&&raw.observedValue||raw&&raw.value),field=text(raw&&raw.field),evidence=arr(raw&&raw.evidence),quote=text(evidence[0]&&evidence[0].quote),body=text(source&&source.content&&source.content.text);if(!field||!value)return{ok:false,reason:'الحقل أو القيمة ناقصان'};if(!quote||!body.includes(quote))return{ok:false,reason:'الاقتباس غير موجود حرفيًا في نص المصدر'};
+    if(field==='address'){const lines=body.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),idx=lines.indexOf(quote);if(templateLineIndexes(lines).has(idx))return{ok:false,reason:'العنوان داخل محتوى قالب أو بيانات تجريبية'};}
+    if(field==='phone'&&bookingSource(source))return{ok:false,reason:'رقم من منصة حجز لا يُنسب للطبيب من غير تصريح واضح بأنه رقم العيادة'};
+    if(field==='last_activity'&&quoteScope(quote)==='review')return{ok:false,reason:'تاريخ التقييم يخص رأي المريض، وليس نشاط العميل'};
+    return{ok:true};
+  }
+  function applyFactExtraction(doc,clientId,sourceId,payload){
+    let next=normalizeDocument(doc),client=next.clients.find(x=>x.id===clientId);if(!client)throw Error('العميل غير موجود');let source=client.sources.find(s=>s.id===sourceId);if(!source)throw Error('المصدر غير موجود');if(source.identity?.status!=='confirmed'||source.read?.status!=='read')throw Error('استخرج من مصدر مؤكد ومقروء فقط');const generated=payload&&Array.isArray(payload.candidates)?payload:extractFactCandidatesFromSource(source,client),accepted=[],rejected=[...arr(generated.rejected)];
+    for(const raw of arr(generated.candidates)){const valid=validateFactCandidate(client,source,raw);if(!valid.ok){rejected.push({field:text(raw.field),value:text(raw.observedValue||raw.value),quote:text(raw.evidence&&raw.evidence[0]&&raw.evidence[0].quote),reason:valid.reason});continue}next=upsertFact(next,clientId,{...raw,sourceId});client=next.clients.find(x=>x.id===clientId);source=client.sources.find(s=>s.id===sourceId);accepted.push(text(raw.semanticKey)||`${text(raw.field)}|${text(raw.scope)||'client'}|${hash(norm(raw.observedValue||raw.value))}`)}
+    source.extraction={status:'extracted',at:nowISO(),contentHash:source.content&&source.content.hash||hash(source.content&&source.content.text||''),accepted:Array.from(new Set(accepted)),rejected:rejected.map(x=>({field:text(x.field),value:text(x.value),quote:text(x.quote),reason:text(x.reason)}))};client.updatedAt=source.extraction.at;client.revisions.data=(Number(client.revisions.data)||0)+1;return{document:next,accepted:source.extraction.accepted,rejected:source.extraction.rejected};
+  }
   function createLocalStorageDriver(storage){return{name:'localStorage',async read(k){return storage.getItem(k)},async write(k,v){storage.setItem(k,v)},async remove(k){storage.removeItem(k)}}}
   function createIndexedDBDriver(indexedDB,name='TechnoTeamRebuildT04'){
     function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore('snapshots');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error||Error('IndexedDB failed'))})}
@@ -162,5 +203,5 @@
     async replace(input){const migrated=normalizeDocument(input);return this.commit(()=>migrated)}
     export(){const doc=normalizeDocument(this.document||emptyDocument());return JSON.stringify({...doc,exportedAt:nowISO()},null,2)}
   }
-  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
+  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,FACT_LABELS,factLabel,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,extractFactCandidatesFromSource,validateFactCandidate,applyFactExtraction,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
 });
