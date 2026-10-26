@@ -33,6 +33,12 @@ r=T.applyFactExtraction(doc,'c1','booking');doc=r.document;
 assert.equal(doc.clients[0].facts.length,beforeFacts,'repeat extraction does not duplicate facts');
 assert.equal(doc.clients[0].evidence.length,beforeEvidence,'repeat extraction does not duplicate evidence');
 
+doc=T.upsertFact(doc,'c1',{field:'platform_phone',scope:'platform',observedValue:'2019-11-03',origin:'deterministic_extraction',sourceId:'booking',evidence:[{sourceId:'booking',url:'https://vezeeta.test/ar/dr/hanan',quote:'آخر تقييم مريض: 2019-11-03',scope:'platform',observedAt:'2026-10-26T10:00:00.000Z'}]});
+doc=T.upsertFact(doc,'c1',{field:'address',scope:'client',observedValue:'للحجز عن طريق التليفون 01220541356',origin:'deterministic_extraction',sourceId:'site',evidence:[{sourceId:'site',url:'https://doctor.test/',quote:'للحجز عن طريق التليفون 01220541356',scope:'client',observedAt:'2026-10-26T10:00:00.000Z'}]});
+doc=T.applyFactExtraction(doc,'c1','booking').document;doc=T.applyFactExtraction(doc,'c1','site').document;
+assert.ok(!doc.clients[0].facts.some(f=>f.field==='platform_phone'&&/2019/.test(f.observedValue)),'stale bad date fact removed on re-extraction');
+assert.ok(!doc.clients[0].facts.some(f=>f.field==='address'&&/عن طريق/.test(f.observedValue)),'stale bad address fact removed on re-extraction');
+
 const rating=doc.clients[0].facts.find(f=>f.field==='rating');
 doc=T.setFactDecision(doc,'c1',rating.id,'approved');
 doc=T.applyFactExtraction(doc,'c1','booking').document;
