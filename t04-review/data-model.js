@@ -21,6 +21,25 @@
     const raw=text(value);if(!raw)return'';
     try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);u.hash='';['utm_source','utm_medium','utm_campaign','utm_term','utm_content','fbclid','gclid'].forEach(k=>u.searchParams.delete(k));u.hostname=u.hostname.toLowerCase().replace(/^www\./,'');u.pathname=u.pathname.replace(/\/$/,'')||'/';return u.toString()}catch{return raw}
   }
+  function parseInputLinks(value){
+    const raw=arr(value).flatMap(v=>text(v).split(/[\s,،]+/)).map(v=>v.replace(/[)\]}>.،]+$/,'')).filter(Boolean),valid=[],invalid=[];
+    for(const item of raw){try{const url=canonicalURL(item),u=new URL(url);if(!/^https?:$/.test(u.protocol)||!u.hostname.includes('.'))throw Error('invalid');valid.push(url)}catch{invalid.push(item)}}
+    return{links:Array.from(new Set(valid)),invalid};
+  }
+  function platformForURL(value){
+    let host='',path='';try{const u=new URL(canonicalURL(value));host=u.hostname.replace(/^www\./,'');path=u.pathname.toLowerCase()}catch{return'مصدر خارجي'}
+    if(host.includes('facebook.com'))return'Facebook';if(host.includes('instagram.com'))return'Instagram';if(host.includes('tiktok.com'))return'TikTok';if(host.includes('youtube.com')||host==='youtu.be')return'YouTube';if(host.includes('linkedin.com'))return'LinkedIn';if(host==='x.com'||host.includes('twitter.com'))return'X';if(host.includes('google.')&&path.includes('/maps')||host==='maps.app.goo.gl')return'Google Maps';if(/vezeeta|dacttra|clinido|ekshef|doctorak/.test(host))return'منصة حجز';return'موقع / مصدر خارجي';
+  }
+  function createClientDraft(doc,input){
+    const name=text(input&&input.name),parsed=parseInputLinks(input&&input.links);if(!name)throw Error('اكتب اسم العميل');if(parsed.invalid.length)throw Error(`راجع الرابط: ${parsed.invalid[0]}`);if(!parsed.links.length)throw Error('أضف رابطًا واحدًا صحيحًا على الأقل');
+    const next=normalizeDocument(doc),fingerprint=`${norm(name)}|${parsed.links.slice().sort().join('|')}`,clientId=text(input&&input.id)||id('client',fingerprint),at=nowISO();let client=next.clients.find(c=>c.id===clientId);
+    if(!client){client={id:clientId,identity:{displayName:name,officialName:'',specialty:text(input&&input.specialty),status:'draft'},inputs:{links:parsed.links,notes:text(input&&input.notes),goal:text(input&&input.goal),budget:text(input&&input.budget),answers:{}},sources:[],evidence:[],facts:[],findings:[],questions:[],decisions:[],report:{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null},revisions:{data:1,review:0,report:0},createdAt:at,updatedAt:at,legacy:{sourceVersion:'rebuild-t05',unmapped:{}}};next.clients.push(client)}else{client.identity.displayName=name;client.identity.specialty=text(input&&input.specialty)||client.identity.specialty;client.inputs={...client.inputs,links:Array.from(new Set([...arr(client.inputs.links),...parsed.links])),notes:text(input&&input.notes)||client.inputs.notes||'',goal:text(input&&input.goal)||client.inputs.goal||'',budget:text(input&&input.budget)||client.inputs.budget||''};client.revisions.data=(Number(client.revisions.data)||0)+1;client.updatedAt=at}
+    for(const url of parsed.links){if(client.sources.some(s=>s.canonicalUrl===url||canonicalURL(s.url)===url))continue;client.sources.push({id:id('src',`${client.id}|${url}`),url,canonicalUrl:url,platform:platformForURL(url),identity:{status:'confirmed',reason:'رابط أضافه المستخدم',proof:{type:'user_input'}},read:{status:'new',title:'',lastAttempt:null,observedAt:null},content:{text:'',rawText:'',hash:hash('')},links:[],legacy:{}})}
+    next.extensions={...next.extensions,activeClientId:client.id,ui:{...next.extensions.ui,stage:'study'}};return{document:next,clientId:client.id,created:client.createdAt===at};
+  }
+  function knownInputs(client){
+    if(!client)return[];const items=[['name','اسم العميل',client.identity&&client.identity.displayName],['specialty','التخصص / النشاط',client.identity&&client.identity.specialty],['notes','الرسالة أو المعلومات',client.inputs&&client.inputs.notes],['goal','الهدف',client.inputs&&client.inputs.goal],['budget','الميزانية',client.inputs&&client.inputs.budget]];for(const [i,url] of arr(client.inputs&&client.inputs.links).entries())items.push([`link_${i+1}`,`رابط ${i+1}`,url]);return items.filter(x=>text(x[2])).map(([key,label,value])=>({key,label,value:text(value)}));
+  }
   function reviewStatus(value){return ['approved','rejected','pending'].includes(value)?value:'pending'}
   function unknownKeys(obj,known){const out={};Object.keys(obj||{}).forEach(k=>{if(!known.includes(k))out[k]=clone(obj[k])});return out}
   function cleanEvidence(e,sourceId){
@@ -109,5 +128,5 @@
     async replace(input){const migrated=normalizeDocument(input);return this.commit(()=>migrated)}
     export(){const doc=normalizeDocument(this.document||emptyDocument());return JSON.stringify({...doc,exportedAt:nowISO()},null,2)}
   }
-  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
+  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,createClientDraft,knownInputs,parseInputLinks,platformForURL,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
 });
