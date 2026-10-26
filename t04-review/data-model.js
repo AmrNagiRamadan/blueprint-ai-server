@@ -114,7 +114,7 @@
       identity:{displayName:text(old&&old.name)||'عميل بدون اسم',officialName:text(old&&old.officialName)||'',specialty:text(old&&old.specialty),status:'draft'},
       inputs:{links:arr(old&&old.links).flatMap(v=>text(v).split(/\s+/)).filter(Boolean),notes:text(old&&old.notes),answers:clone(old&&old.answers)||{}},
       sources,evidence,facts,findings,
-      questions:[],decisions,contentSamples:[],
+      questions:[],decisions,contentSamples:[],competitorSelection:normalizeCompetitorSelection({}),
       report:clone(old&&old.report)||{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null},
       revisions:{data:Number(old&&old.revision)||0,review:decisions.length,report:0},
       createdAt:old&&old.created||nowISO(),updatedAt:old&&old.updated||nowISO(),
@@ -123,7 +123,7 @@
   }
   function normalizeCanonicalClient(c){
     const base=migrateClient({id:c.id,name:c.identity&&c.identity.displayName,specialty:c.identity&&c.identity.specialty,links:c.inputs&&c.inputs.links,notes:c.inputs&&c.inputs.notes,created:c.createdAt,updated:c.updatedAt},'canonical');
-    return{...base,...clone(c),identity:{...base.identity,...clone(c.identity)},inputs:{...base.inputs,...clone(c.inputs)},sources:arr(c.sources).map(s=>s&&s.read?clone(s):normalizeSource(s,c.id)),evidence:arr(c.evidence).map(e=>cleanEvidence(e,e&&e.sourceId)),facts:arr(c.facts).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),findings:arr(c.findings).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),questions:arr(c.questions),decisions:arr(c.decisions),contentSamples:arr(c.contentSamples).map(normalizeContentSample),report:{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null,...clone(c.report)},revisions:{data:0,review:0,report:0,...clone(c.revisions)},legacy:clone(c.legacy)||{sourceVersion:'canonical',unmapped:{}}};
+    return{...base,...clone(c),identity:{...base.identity,...clone(c.identity)},inputs:{...base.inputs,...clone(c.inputs)},sources:arr(c.sources).map(s=>s&&s.read?clone(s):normalizeSource(s,c.id)),evidence:arr(c.evidence).map(e=>cleanEvidence(e,e&&e.sourceId)),facts:arr(c.facts).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),findings:arr(c.findings).map(f=>({...clone(f),review:{status:'pending',teamCorrection:null,updatedAt:null,...clone(f.review)},evidenceIds:arr(f.evidenceIds),sourceIds:arr(f.sourceIds)})),questions:arr(c.questions),decisions:arr(c.decisions),contentSamples:arr(c.contentSamples).map(normalizeContentSample),competitorSelection:normalizeCompetitorSelection(c.competitorSelection),report:{status:'not_started',slides:[],generatedFromRevision:null,updatedAt:null,...clone(c.report)},revisions:{data:0,review:0,report:0,...clone(c.revisions)},legacy:clone(c.legacy)||{sourceVersion:'canonical',unmapped:{}}};
   }
   function normalizeDocument(input){
     if(input&&input.format===FORMAT&&Number(input.schemaVersion)===SCHEMA_VERSION){const d=clone(input);d.clients=arr(d.clients).map(normalizeCanonicalClient);d.revision=Number(d.revision)||0;d.extensions=clone(d.extensions)||{};return d}
@@ -214,6 +214,125 @@
   function percentageBreakdown(posts,key,labels){const total=posts.length;if(!total)return[];const counts=new Map();posts.forEach(p=>{const value=key(p);counts.set(value,(counts.get(value)||0)+1)});const rows=[...counts].map(([value,count])=>({key:value,label:labels[value]||value,count,percent:Number((count*100/total).toFixed(1))})).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label,'ar'));const sum=rows.reduce((n,x)=>n+x.percent,0),diff=Number((100-sum).toFixed(1));if(rows.length&&diff)rows[rows.length-1].percent=Number((rows[rows.length-1].percent+diff).toFixed(1));return rows}
   function buildContentAnalysis(client,options={}){const asOf=contentDate(options.asOf)||nowISO().slice(0,10),sources=arr(client&&client.sources).filter(s=>s.identity?.status==='confirmed'&&SOCIAL_PLATFORMS.includes(s.platform)),samples=arr(client&&client.contentSamples).map(normalizeContentSample),sourceIds=new Set(sources.map(s=>s.id));for(const sample of samples)if(!sourceIds.has(sample.sourceId)){const s=arr(client&&client.sources).find(x=>x.id===sample.sourceId);if(s&&SOCIAL_PLATFORMS.includes(s.platform)){sources.push(s);sourceIds.add(s.id)}}const platforms=sources.map(source=>{const sample=samples.find(x=>x.sourceId===source.id)||normalizeContentSample({sourceId:source.id}),seen=new Map();sample.posts.forEach(p=>{if(p.publishedAt&&p.text&&!seen.has(p.id))seen.set(p.id,p)});const posts=[...seen.values()].sort((a,b)=>b.publishedAt.localeCompare(a.publishedAt)),lastActivity=posts[0]?.publishedAt||'',firstActivity=posts.at(-1)?.publishedAt||'',ageDays=lastActivity?Math.max(0,Math.floor((Date.parse(asOf+'T00:00:00Z')-Date.parse(lastActivity+'T00:00:00Z'))/86400000)):null,typeBreakdown=percentageBreakdown(posts,p=>p.teamType||p.detectedType||classifyContentText(p.text),CONTENT_TYPES),formatBreakdown=percentageBreakdown(posts,p=>p.format||'text',CONTENT_FORMATS),limits=[];if(!posts.length)limits.push('مفيش منشورات مؤرخة ومعتمدة في العينة؛ مش هنحسب نسب أو نحكم على المحتوى.');else{limits.push('النتيجة تصف العينة المرصودة فقط ('+posts.length+' منشور)، ولا تمثل كل محتوى الحساب.');limits.push('فترة العينة من '+firstActivity+' إلى '+lastActivity+'.');if(ageDays>90)limits.push('آخر نشاط مرصود أقدم من 90 يوم؛ عرضناه بدل اعتبار آخر 90 يوم فترة بلا محتوى.')}if(sample.rejected.length)limits.push(sample.rejected.length+' عنصر لم يدخل الحساب بسبب نقص التاريخ أو النص.');const top=typeBreakdown[0],tie=top&&typeBreakdown[1]&&top.count===typeBreakdown[1].count,observation=top&&!tie&&top.count>=2?'داخل العينة، «'+top.label+'» هو الأكثر ظهورًا ('+top.count+' من '+posts.length+').':'مفيش نوع واحد مهيمن بوضوح داخل العينة.';return{sourceId:source.id,platform:source.platform,sourceUrl:source.url,title:source.read?.title||source.platform,status:posts.length?'sampled':'no_sample',sampleCount:posts.length,lastActivity,firstActivity,ageDays,typeBreakdown,formatBreakdown,posts,observation,limits,rejected:sample.rejected}});const all=platforms.flatMap(x=>x.posts),latest=all.slice().sort((a,b)=>b.publishedAt.localeCompare(a.publishedAt))[0]?.publishedAt||'';return{asOf,platforms,totalPosts:all.length,lastActivity:latest,typeBreakdown:percentageBreakdown(all,p=>p.teamType||p.detectedType||classifyContentText(p.text),CONTENT_TYPES),formatBreakdown:percentageBreakdown(all,p=>p.format||'text',CONTENT_FORMATS),status:all.length?'sampled':'no_sample'}}
 
+
+  const COMPETITOR_SOURCE_TYPES={official_site:'موقع رسمي',maps:'Google Maps',social:'حساب سوشيال',booking:'منصة حجز',ad_library:'مكتبة إعلانات',directory:'دليل خارجي',other:'مصدر خارجي'};
+  const COMPETITOR_DECISIONS=['pending','approved','rejected'];
+  function competitorSourceType(value,hint){
+    let host='',path='';try{const u=new URL(canonicalURL(value));host=u.hostname.replace(/^www\./,'');path=u.pathname.toLowerCase()}catch{return COMPETITOR_SOURCE_TYPES[hint]?hint:'other'}
+    if((host.includes('google.')&&path.includes('/maps'))||host==='maps.app.goo.gl'||host==='g.page')return'maps';
+    if(/facebook\.com|instagram\.com|tiktok\.com|youtube\.com|youtu\.be|linkedin\.com|(?:^|\.)x\.com|twitter\.com/.test(host))return path.includes('/ads/library')?'ad_library':'social';
+    if(/vezeeta|dacttra|clinido|ekshef|doctorak|doctoorum|tabibi/.test(host))return'booking';
+    if(/ads\.google|adstransparency|library\.tiktok/.test(host))return'ad_library';
+    if(COMPETITOR_SOURCE_TYPES[hint])return hint;
+    return'other';
+  }
+  function competitorTokens(value){
+    const stop=new Set(['مركز','عياده','عيادة','دكتور','دكتوره','الدكتور','الدكتوره','clinic','center','medical','doctor','dr','في','من','على','عن','the','and','للطب','طبي']);
+    return Array.from(new Set(norm(value).replace(/[^\p{L}\p{N}\s]/gu,' ').split(/\s+/).filter(w=>w.length>1&&!stop.has(w))));
+  }
+  function tokenOverlap(target,value){
+    const wanted=competitorTokens(target),seen=new Set(competitorTokens(value));if(!wanted.length)return{matched:false,hits:[]};
+    const hits=wanted.filter(w=>seen.has(w)||[...seen].some(x=>x.length>3&&w.length>3&&(x.includes(w)||w.includes(x))));
+    return{matched:hits.length>0,hits:Array.from(new Set(hits))};
+  }
+  function normalizeCompetitorSource(raw={}){
+    const url=canonicalURL(raw.url),type=competitorSourceType(url,text(raw.type));
+    return{id:text(raw.id)||id('comp_src',url+'|'+norm(raw.evidence||raw.title)),url,type,title:text(raw.title),evidence:text(raw.evidence||raw.quote),observedAt:raw.observedAt||null};
+  }
+  function normalizeCompetitorCandidate(raw={},index=0){
+    const sources=arr(raw.sources).map(normalizeCompetitorSource).filter(s=>s.url),first=sources[0]?.url||'';
+    const name=text(raw.name||raw.title)||'مرشح بدون اسم',area=text(raw.area||raw.region),service=text(raw.service||raw.specialty);
+    const stable=text(raw.id)||id('competitor',norm(name)+'|'+norm(area)+'|'+accountKey(first));
+    const review=raw.review&&COMPETITOR_DECISIONS.includes(raw.review.status)?clone(raw.review):{status:'pending',note:'',updatedAt:null,by:null};
+    return{id:stable,name,service,area,sources,summary:text(raw.summary),review,eligibility:clone(raw.eligibility)||null,origin:text(raw.origin)||'manual',createdAt:raw.createdAt||null,updatedAt:raw.updatedAt||null,legacy:clone(raw.legacy)||{}};
+  }
+  function normalizeCompetitorSelection(raw={}){
+    return{search:{service:text(raw.search&&raw.search.service),region:text(raw.search&&raw.search.region),updatedAt:raw.search&&raw.search.updatedAt||null},candidates:arr(raw.candidates).map(normalizeCompetitorCandidate),runs:arr(raw.runs).map(clone),limits:arr(raw.limits).map(text).filter(Boolean),updatedAt:raw.updatedAt||null};
+  }
+  function competitorSearchContext(client,override={}){
+    const selection=normalizeCompetitorSelection(client&&client.competitorSelection),approved=buildFactGroups(client||{}).filter(g=>g.status==='approved'||g.status==='corrected');
+    const specialty=approved.find(g=>g.field==='specialty')?.value||client?.identity?.specialty||'';
+    const services=approved.filter(g=>g.field==='service').map(g=>g.value).join('، ');
+    return{service:text(override.service)||selection.search.service||text(services)||text(specialty),region:text(override.region)||selection.search.region};
+  }
+  function evaluateCompetitorCandidate(raw,context={}){
+    const c=normalizeCompetitorCandidate(raw),body=[c.name,c.service,c.area,c.summary,...c.sources.map(s=>s.title+' '+s.evidence)].join(' ');
+    const service=tokenOverlap(context.service,body),region=tokenOverlap(context.region,body);
+    const b2b=/ل(?:أ|ا)طباء|كدكتور|افتح عيادتك|عيادتك تحتاج|فرانشايز|ت[أا]جير|إيجار|ايجار|تايم شير|توريد|مستلزمات|معدات|تشطيب|ديكور|تراخيص/.test(norm(body));
+    const usableSources=c.sources.filter(s=>s.url&&!/\/(?:search|find|list)(?:\/|$)/.test(new URL(s.url).pathname.toLowerCase()));
+    const direct=usableSources.some(s=>['official_site','maps','social','booking','ad_library','other'].includes(s.type));
+    const evidence=usableSources.some(s=>text(s.evidence)||text(s.title));
+    let state='needs_review',label='محتاج تحقق',reasons=[];
+    if(b2b){state='ineligible';label='غير مناسب';reasons.push('المحتوى موجه لأصحاب العيادات أو يبيع توريدًا/تأجيرًا/خدمة B2B')}
+    if(!service.matched)reasons.push('تشابه الخدمة غير مثبت');
+    else reasons.push('تشابه خدمة: '+service.hits.join('، '));
+    if(!region.matched)reasons.push('تشابه المنطقة غير مثبت');
+    else reasons.push('تشابه منطقة: '+region.hits.join('، '));
+    if(!direct||!evidence)reasons.push('ناقص مصدر مباشر قابل للمراجعة');
+    else reasons.push('يوجد مصدر مباشر ودليل ظاهر');
+    if(!b2b&&service.matched&&region.matched&&direct&&evidence){state='strong';label='مرشح قوي'}
+    else if(!b2b&&context.service&&context.region&&((c.service&&!service.matched)||(c.area&&!region.matched))){state='ineligible';label='غير مناسب'}
+    return{state,label,reasons,signals:{serviceMatch:service.matched,regionMatch:region.matched,directSource:direct,evidenceAvailable:evidence,b2b},score:[service.matched,region.matched,direct,evidence].filter(Boolean).length};
+  }
+  function setCompetitorSearchContext(doc,clientId,search={}){
+    const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');
+    const service=text(search.service),region=text(search.region);if(!service)throw Error('اكتب الخدمة التي سنبحث عن منافسين عليها');if(!region)throw Error('اكتب المنطقة التي سنقارن داخلها');
+    client.competitorSelection=normalizeCompetitorSelection(client.competitorSelection);client.competitorSelection.search={service,region,updatedAt:nowISO()};
+    client.competitorSelection.candidates=client.competitorSelection.candidates.map(c=>({...c,eligibility:evaluateCompetitorCandidate(c,{service,region})}));
+    client.competitorSelection.updatedAt=nowISO();client.updatedAt=client.competitorSelection.updatedAt;client.revisions.data=(Number(client.revisions.data)||0)+1;return next;
+  }
+  function competitorCandidateKey(candidate){
+    const c=normalizeCompetitorCandidate(candidate),official=c.sources.find(s=>['official_site','maps'].includes(s.type))||c.sources[0];
+    return official&&official.url?accountKey(official.url):norm(c.name)+'|'+norm(c.area);
+  }
+  function applyCompetitorCandidates(doc,clientId,items,meta={}){
+    const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');
+    client.competitorSelection=normalizeCompetitorSelection(client.competitorSelection);const selection=client.competitorSelection,context=competitorSearchContext(client),existing=new Map();
+    selection.candidates.forEach(c=>{existing.set(competitorCandidateKey(c),c);existing.set(norm(c.name)+'|'+norm(c.area),c)});
+    const added=[],merged=[];
+    for(const raw of arr(items)){
+      const incoming=normalizeCompetitorCandidate({...raw,origin:text(meta.origin)||raw.origin||'search'});
+      if(!incoming.name||incoming.name==='مرشح بدون اسم')continue;
+      const key=competitorCandidateKey(incoming),nameKey=norm(incoming.name)+'|'+norm(incoming.area),old=existing.get(key)||existing.get(nameKey);
+      if(old){
+        const urls=new Set(old.sources.map(s=>s.url));for(const s of incoming.sources)if(!urls.has(s.url)){old.sources.push(s);urls.add(s.url)}
+        if(!old.service&&incoming.service)old.service=incoming.service;if(!old.area&&incoming.area)old.area=incoming.area;if(!old.summary&&incoming.summary)old.summary=incoming.summary;
+        old.updatedAt=nowISO();old.eligibility=evaluateCompetitorCandidate(old,context);merged.push(old.id);existing.set(key,old);existing.set(nameKey,old);
+      }else{
+        incoming.createdAt=nowISO();incoming.updatedAt=incoming.createdAt;incoming.eligibility=evaluateCompetitorCandidate(incoming,context);selection.candidates.push(incoming);existing.set(key,incoming);existing.set(nameKey,incoming);added.push(incoming.id);
+      }
+    }
+    selection.runs.push({id:id('comp_run',client.id+'|'+Date.now()),status:meta.status==='error'?'error':'success',at:nowISO(),items:arr(items).length,added:added.length,merged:merged.length,error:text(meta.error),origin:text(meta.origin)||'search'});
+    selection.runs=selection.runs.slice(-10);if(meta.status==='error')selection.limits=Array.from(new Set([...selection.limits,'تعذر آخر بحث عن المنافسين؛ المرشحون والقرارات السابقة محفوظون.']));else selection.limits=selection.limits.filter(x=>!x.includes('تعذر آخر بحث'));
+    selection.updatedAt=nowISO();client.updatedAt=selection.updatedAt;client.revisions.data=(Number(client.revisions.data)||0)+1;return{document:next,added,merged};
+  }
+  function updateCompetitorCandidate(doc,clientId,candidateId,patch={}){
+    const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');client.competitorSelection=normalizeCompetitorSelection(client.competitorSelection);
+    const c=client.competitorSelection.candidates.find(x=>x.id===candidateId);if(!c)throw Error('المرشح غير موجود');
+    if(Object.prototype.hasOwnProperty.call(patch,'name'))c.name=text(patch.name);if(Object.prototype.hasOwnProperty.call(patch,'service'))c.service=text(patch.service);if(Object.prototype.hasOwnProperty.call(patch,'area'))c.area=text(patch.area);if(Object.prototype.hasOwnProperty.call(patch,'summary'))c.summary=text(patch.summary);
+    if(Array.isArray(patch.sources))c.sources=patch.sources.map(normalizeCompetitorSource).filter(s=>s.url);
+    c.eligibility=evaluateCompetitorCandidate(c,competitorSearchContext(client));c.updatedAt=nowISO();client.competitorSelection.updatedAt=c.updatedAt;client.updatedAt=c.updatedAt;client.revisions.data=(Number(client.revisions.data)||0)+1;return next;
+  }
+  function setCompetitorDecision(doc,clientId,candidateId,status,note=''){
+    if(!['approved','rejected'].includes(status))throw Error('قرار المنافس غير صالح');const next=normalizeDocument(doc),client=next.clients.find(c=>c.id===clientId);if(!client)throw Error('العميل غير موجود');client.competitorSelection=normalizeCompetitorSelection(client.competitorSelection);
+    const c=client.competitorSelection.candidates.find(x=>x.id===candidateId);if(!c)throw Error('المرشح غير موجود');c.eligibility=evaluateCompetitorCandidate(c,competitorSearchContext(client));
+    if(status==='approved'&&c.eligibility.state!=='strong')throw Error('كمّل إثبات تشابه الخدمة والمنطقة والمصدر قبل الاعتماد');
+    const approved=client.competitorSelection.candidates.filter(x=>x.review.status==='approved'&&x.id!==candidateId);if(status==='approved'&&approved.length>=5)throw Error('القائمة القصيرة اكتملت بخمسة منافسين؛ راجعها قبل إضافة آخر');
+    const at=nowISO();c.review={status,note:text(note),updatedAt:at,by:'team'};c.updatedAt=at;const did='decision_competitor_'+c.id,decision={id:did,targetType:'competitor',targetId:c.id,status,note:text(note),at,by:'team'},i=client.decisions.findIndex(d=>d.id===did);if(i>=0)client.decisions[i]=decision;else client.decisions.push(decision);
+    client.competitorSelection.updatedAt=at;client.updatedAt=at;client.revisions.review=(Number(client.revisions.review)||0)+1;return next;
+  }
+  function parseCompetitorPaste(value){
+    const blocks=String(value||'').trim().split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean),items=[],rejected=[];
+    blocks.forEach((block,index)=>{const data={sources:[]};for(const line of block.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)){const m=/^([^:：]+)[:：]\s*(.+)$/.exec(line);if(!m)continue;const key=norm(m[1]),v=text(m[2]);if(/الاسم|name/.test(key))data.name=v;else if(/الخدمه|الخدمة|service|specialty/.test(key))data.service=v;else if(/المنطقه|المنطقة|area|region/.test(key))data.area=v;else if(/الملخص|summary/.test(key))data.summary=v;else if(/الرابط|link|url/.test(key))data.sources.push({url:v});else if(/الدليل|evidence|quote/.test(key)){if(!data.sources.length)data.sources.push({url:''});data.sources[data.sources.length-1].evidence=v}else if(/نوع المصدر|source type|type/.test(key)){if(!data.sources.length)data.sources.push({url:''});data.sources[data.sources.length-1].type=v}}
+      if(!data.name||!data.sources.some(s=>canonicalURL(s.url))){rejected.push({index,reason:'اسم المنافس ورابط مصدر واحد على الأقل مطلوبان',text:block});return}items.push(data)});
+    return{items,rejected};
+  }
+  function buildCompetitorSelection(client){
+    const selection=normalizeCompetitorSelection(client&&client.competitorSelection),context=competitorSearchContext(client),candidates=selection.candidates.map(c=>({...c,eligibility:evaluateCompetitorCandidate(c,context)}));
+    const order={approved:0,pending:1,rejected:2},strength={strong:0,needs_review:1,ineligible:2};candidates.sort((a,b)=>(order[a.review.status]??1)-(order[b.review.status]??1)||(strength[a.eligibility.state]??1)-(strength[b.eligibility.state]??1)||b.eligibility.score-a.eligibility.score||a.name.localeCompare(b.name,'ar'));
+    const approved=candidates.filter(c=>c.review.status==='approved'),pending=candidates.filter(c=>c.review.status==='pending'),limits=[...selection.limits];if(!context.service)limits.push('الخدمة غير محددة؛ لا يمكن تقييم تشابه المنافسين.');if(!context.region)limits.push('المنطقة غير محددة؛ لا يمكن تقييم المنافسة المحلية.');if(approved.length<3)limits.push('القائمة القصيرة أقل من 3 منافسين معتمدين.');return{context,candidates,approved,pending,limits:Array.from(new Set(limits)),complete:approved.length>=3&&approved.length<=5};
+  }
+
   function createLocalStorageDriver(storage){return{name:'localStorage',async read(k){return storage.getItem(k)},async write(k,v){storage.setItem(k,v)},async remove(k){storage.removeItem(k)}}}
   function createIndexedDBDriver(indexedDB,name='TechnoTeamRebuildT04'){
     function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open(name,1);r.onupgradeneeded=()=>r.result.createObjectStore('snapshots');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error||Error('IndexedDB failed'))})}
@@ -227,5 +346,5 @@
     async replace(input){const migrated=normalizeDocument(input);return this.commit(()=>migrated)}
     export(){const doc=normalizeDocument(this.document||emptyDocument());return JSON.stringify({...doc,exportedAt:nowISO()},null,2)}
   }
-  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,FACT_LABELS,CONTENT_TYPES,CONTENT_FORMATS,SOCIAL_PLATFORMS,factLabel,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,extractFactCandidatesFromSource,validateFactCandidate,applyFactExtraction,factsEquivalent,buildFactGroups,setFactGroupDecision,buildFactComparisons,resolveFactComparison,normalizeContentPost,parseContentPaste,setContentSample,setContentPostType,buildContentAnalysis,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
+  return{FORMAT,SCHEMA_VERSION,CURRENT_KEY,PREVIOUS_KEY,DISCOVERY_PLATFORMS,FACT_LABELS,CONTENT_TYPES,CONTENT_FORMATS,SOCIAL_PLATFORMS,COMPETITOR_SOURCE_TYPES,factLabel,emptyDocument,normalizeDocument,migrate,validateDocument,setFactDecision,effectiveFact,upsertFact,extractFactCandidatesFromSource,validateFactCandidate,applyFactExtraction,factsEquivalent,buildFactGroups,setFactGroupDecision,buildFactComparisons,resolveFactComparison,normalizeContentPost,parseContentPaste,setContentSample,setContentPostType,buildContentAnalysis,competitorSourceType,normalizeCompetitorCandidate,normalizeCompetitorSelection,competitorSearchContext,evaluateCompetitorCandidate,setCompetitorSearchContext,applyCompetitorCandidates,updateCompetitorCandidate,setCompetitorDecision,parseCompetitorPaste,buildCompetitorSelection,createClientDraft,knownInputs,parseInputLinks,platformForURL,accountKey,isAccountCandidate,identitySignalsForCandidate,applyDiscoveryResults,setSourceIdentity,sourceReadEligible,looksBlockedContent,applySourceReadResult,setManualSourceContent,createLocalStorageDriver,createIndexedDBDriver,DataStore,canonicalURL,hash,clone};
 });
