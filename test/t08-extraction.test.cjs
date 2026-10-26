@@ -18,11 +18,13 @@ r=T.applyFactExtraction(doc,'c1','booking');doc=r.document;
 const c=doc.clients[0];
 assert.ok(!c.facts.some(f=>f.field==='phone'&&/16676/.test(f.observedValue)),'platform phone is not client phone');
 assert.ok(c.facts.some(f=>f.field==='platform_phone'&&f.scope==='platform'&&/16676/.test(f.observedValue)),'platform phone scoped correctly');
+assert.ok(!c.facts.some(f=>f.field==='platform_phone'&&/2019/.test(f.observedValue)),'review date is not a platform phone');
 assert.ok(c.facts.some(f=>f.field==='last_review_date'&&f.scope==='review'&&f.observedValue==='2019-11-03'),'review date scoped correctly');
 assert.ok(!c.facts.some(f=>f.field==='last_activity'),'review date is not client activity');
 assert.ok(c.facts.some(f=>f.field==='rating'&&/4.8/.test(f.observedValue)),'rating extracted');
 assert.ok(c.facts.some(f=>f.field==='reviews_count'&&f.observedValue==='200'),'review count extracted');
 assert.ok(c.facts.some(f=>f.field==='price'&&f.observedValue==='300 جنيه'),'price extracted');
+assert.ok(!c.facts.some(f=>f.field==='address'&&/عن طريق/.test(f.observedValue)),'booking phrase is not an address');
 
 for(const f of c.facts){for(const eid of f.evidenceIds){const e=c.evidence.find(x=>x.id===eid);assert.ok(e,'evidence exists');const s=c.sources.find(x=>x.id===e.sourceId);assert.ok(s.content.text.includes(e.quote),'quote is exact');assert.ok(e.url,'evidence url');assert.ok(e.observedAt,'observation date');assert.ok(e.scope,'evidence scope')}}
 
