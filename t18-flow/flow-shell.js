@@ -33,6 +33,7 @@
   shell.className='tt-flow';
   shell.setAttribute('aria-label','مسار إعداد الأوديت والخطة');
   document.body.appendChild(shell);
+  let lastSignature='';
 
   function readDoc(){
     try{return T.normalizeDocument(JSON.parse(localStorage.getItem(KEYS.current)||'{}'))}catch{return T.emptyDocument()}
@@ -55,6 +56,9 @@
   }
   function render(){
     const doc=readDoc(),c=clientFrom(doc),g=gate(currentId,c),stage=stageFor(currentId),prev=steps[index-1],next=steps[index+1];
+    const signature=[c&&c.id,c&&c.updatedAt,currentId,g.ok,g.reason].join('|');
+    if(signature===lastSignature&&shell.childElementCount)return;
+    lastSignature=signature;
     const stages=['بيانات ودراسة العميل','التحليل والخطة','التقرير النهائي'];
     shell.innerHTML=`<div class="tt-flow-top"><div class="tt-flow-title"><div class="tt-flow-step">الخطوة ${index+1} من ${steps.length} · ${steps[index].label}</div><b>${c?escapeHTML(c.identity?.displayName||'العميل'):'مفيش عميل نشط'}</b><a class="tt-flow-home" href="../techno-team-os/">لوحة العملاء</a></div><div class="tt-flow-stages">${stages.map((x,i)=>`<span class="tt-stage ${i<stage?'done':i===stage?'active':''}">${i+1} · ${x}</span>`).join('')}</div><div class="tt-flow-nav">${prev?`<a class="tt-flow-btn tt-flow-prev" href="${prev.path}">السابق</a>`:'<span></span>'}${next?`<a class="tt-flow-btn tt-flow-next" href="${g.ok?next.path:'#'}" aria-disabled="${g.ok?'false':'true'}">التالي: ${next.label}</a>`:`<a class="tt-flow-btn tt-flow-next" href="../techno-team-os/">إنهاء والعودة للوحة</a>`}</div></div><div class="tt-flow-state ${g.ok?'tt-flow-complete':''}">${escapeHTML(g.reason)}</div>`;
     const nextButton=shell.querySelector('.tt-flow-next[aria-disabled="true"]');
