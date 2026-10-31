@@ -47,5 +47,5 @@ function sample(){const now=new Date().toISOString();return{id:'client_t14_accep
 async function loadDemo(){if(busy)return;busy=true;try{const r=await store.commit(d=>{const c=sample(),i=d.clients.findIndex(x=>x.id===c.id);if(i>=0)d.clients[i]=c;else d.clients.push(c);let n=T.refreshInitialPlan(d,c.id);n.extensions.activeClientId=c.id;return n});if(!r.ok)throw Error(r.error?.message||'تعذر تحميل العينة');doc=r.document;activeId='client_t14_acceptance_sample';activeSection='positioning';toast('اتحملت عينة منفصلة؛ بيانات عملائك محفوظة.')}catch(e){toast(e.message)}finally{busy=false;render()}}
 async function init(){const drivers=[T.createLocalStorageDriver(localStorage)];try{drivers.push(T.createIndexedDBDriver(indexedDB,'TechnoTeamRebuildT05'))}catch{}store=new T.DataStore(drivers,KEYS);const l=await store.load();doc=l.document;activeId=doc.extensions.activeClientId||doc.clients[0]?.id||null;render()}init();
 </script>
-</body>
+<script src="../t18-flow/flow-shell.js?v=t18-1"></script></body>
 </html>
