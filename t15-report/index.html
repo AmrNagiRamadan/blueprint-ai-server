@@ -35,4 +35,4 @@ function sample(){const now=new Date().toISOString();return{id:'client_t15_accep
 async function loadDemo(){if(busy)return;busy=true;try{const out=await store.commit(d=>{const c=sample(),i=d.clients.findIndex(x=>x.id===c.id);if(i>=0)d.clients[i]=c;else d.clients.push(c);let n=T.refreshInitialPlan(d,c.id);for(const item of T.buildInitialPlan(n.clients.find(x=>x.id===c.id)).items)n=T.setPlanDecision(n,c.id,item.id,'approved');n=T.refreshFinalReport(n,c.id);n.extensions.activeClientId=c.id;return n});if(!out.ok)throw Error(out.error?.message||'تعذر تحميل العينة');doc=out.document;activeId='client_t15_acceptance_sample';slideIndex=0;toast('اتحملت عينة منفصلة؛ بيانات عملائك محفوظة.')}catch(e){toast(e.message)}finally{busy=false;render()}}
 async function init(){const drivers=[T.createLocalStorageDriver(localStorage)];try{drivers.push(T.createIndexedDBDriver(indexedDB,'TechnoTeamRebuildT05'))}catch{}store=new T.DataStore(drivers,KEYS);const loaded=await store.load();doc=loaded.document;activeId=doc.extensions.activeClientId||doc.clients[0]?.id||null;render()}init();
 </script>
-</body></html>
+<script src="../t18-flow/flow-shell.js?v=t18-1"></script></body></html>
