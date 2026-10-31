@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Techno Team OS — التطبيق الموحّد</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="#" aria-label="Techno Team OS"><span class="logo">TT</span><span><b>Techno Team OS</b><small>من الحسابات إلى التقرير</small></span></a>
+        <nav class="flow" aria-label="رحلة العميل">
+          <button class="flow-step" data-stage="client"><i>1</i><span>بيانات العميل</span></button>
+          <button class="flow-step" data-stage="accounts"><i>2</i><span>تثبيت الحسابات</span></button>
+          <button class="flow-step" data-stage="processing"><i>3</i><span>تجهيز الدراسة</span></button>
+          <button class="flow-step" data-stage="report"><i>4</i><span>التقرير</span></button>
+        </nav>
+        <div class="top-actions"><span id="saveBadge" class="save-badge">جاري التحميل…</span><button id="exportBtn" class="icon-btn" aria-label="تنزيل نسخة بيانات">نسخة بيانات</button><button id="importBtn" class="icon-btn" aria-label="استيراد نسخة بيانات">استيراد</button></div>
+      </div>
+    </header>
+    <main class="workspace">
+      <aside class="client-rail">
+        <div class="rail-head"><div><small>ملفات العملاء</small><b>نفس السجل في كل المراحل</b></div><button id="newClientBtn" class="mini-btn">+ جديد</button></div>
+        <div id="clientList" class="client-list"></div>
+        <div class="rail-note">ملف واحد للعميل، وبحث موجّه، وتجهيز تلقائي، وتقرير قابل للمراجعة والتحميل.</div>
+      </aside>
+      <section id="mainView" class="main-view" aria-live="polite"></section>
+    </main>
+  </div>
+  <input id="importFile" type="file" accept="application/json,.json" hidden>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="../t04-review/data-model.js"></script>
+  <script src="pipeline.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
