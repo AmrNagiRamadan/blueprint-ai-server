@@ -16,4 +16,4 @@ async function readMissing(){if(batch)return;batch=true;render();const ids=count
 async function saveManual(id){try{const value=document.querySelector(`[data-manual-text="${CSS.escape(id)}"]`)?.value||'',note=document.querySelector(`[data-manual-note="${CSS.escape(id)}"]`)?.value||'',result=await store.commit(d=>T.setManualSourceContent(d,activeId,id,value,note));if(!result.ok)throw Error('تعذر حفظ المحتوى اليدوي');doc=result.document;manualOpen='';render();toast('اتحفظ المحتوى اليدوي مع توضيح مصدره.')}catch(e){showError(e.message)}}
 function showError(msg){const e=$('#error');if(!e)return;e.textContent=msg;e.classList.add('show')}
 async function init(){const drivers=[T.createLocalStorageDriver(localStorage)];try{drivers.push(T.createIndexedDBDriver(indexedDB,'TechnoTeamRebuildT05'))}catch{}store=new T.DataStore(drivers,KEYS);const loaded=await store.load();doc=loaded.document;activeId=doc.extensions.activeClientId||doc.clients[0]?.id||null;render()}init();
-</script></body></html>
+</script><script src="../t18-flow/flow-shell.js?v=t18-1"></script></body></html>
