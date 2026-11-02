@@ -2,89 +2,14 @@ import { chromium as playwright } from 'playwright-core';
 import chromium from '@sparticuz/chromium';
 import { guard } from './_lib/guard.js';
 import { readFile } from 'node:fs/promises';
-
-const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-}[char]));
-
-function clean(value, limit = 3000) {
-  return String(value == null ? '' : value).replace(/\u0000/g, '').slice(0, limit);
-}
-
-function parseBody(req) {
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const slides = Array.isArray(body.slides) ? body.slides.slice(0, 12) : [];
-  if (slides.length !== 12) throw new Error('التقرير لازم يحتوي على 12 سلايدًا');
-  return {
-    title: clean(body.title, 180),
-    client: { name: clean(body.client?.name, 140), specialty: clean(body.client?.specialty, 180) },
-    slides: slides.map((slide, index) => ({
-      number: Number(slide.number) || index + 1,
-      title: clean(slide.title, 140),
-      headline: clean(slide.headline, 500),
-      body: clean(slide.body, 5000),
-      kind: ['observed', 'inference', 'proposal', 'unverified'].includes(slide.kind) ? slide.kind : 'proposal'
-    }))
-  };
-}
-
-let embeddedFontsPromise;
-
-function embeddedFonts() {
-  if (!embeddedFontsPromise) {
-    embeddedFontsPromise = Promise.all([
-      readFile(new URL('../assets/fonts/Cairo-Regular.b64', import.meta.url), 'utf8'),
-      readFile(new URL('../assets/fonts/Cairo-Bold.b64', import.meta.url), 'utf8'),
-      readFile(new URL('../assets/fonts/Cairo-ExtraBold.b64', import.meta.url), 'utf8')
-    ]).then(([regular, bold, extraBold]) => ({
-      regular: regular.trim(),
-      bold: bold.trim(),
-      extraBold: extraBold.trim()
-    }));
-  }
-  return embeddedFontsPromise;
-}
-
-function reportHTML(report, fonts) {
-  const kind = { observed: 'مرصود', inference: 'قراءتنا', proposal: 'مقترح Techno Team', unverified: 'غير متحقق' };
-  const pages = report.slides.map(slide => `<section class="page ${esc(slide.kind)}">
-    <div class="glow"></div>
-    <header><div><span class="pill">${esc(kind[slide.kind] || slide.kind)}</span><h2>${esc(slide.title)}</h2></div><strong>${String(slide.number).padStart(2, '0')}</strong></header>
-    <main><h1>${esc(slide.headline)}</h1><div class="body">${esc(slide.body).replace(/\n/g, '<br>')}</div></main>
-    <footer><b>Techno Team</b><span>${esc(report.client.name)}</span></footer>
-  </section>`).join('');
-  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
-  @font-face{font-family:"CairoEmbedded";font-style:normal;font-weight:400;font-display:block;src:url(data:font/ttf;base64,${fonts.regular}) format("truetype")}@font-face{font-family:"CairoEmbedded";font-style:normal;font-weight:700;font-display:block;src:url(data:font/ttf;base64,${fonts.bold}) format("truetype")}@font-face{font-family:"CairoEmbedded";font-style:normal;font-weight:800 900;font-display:block;src:url(data:font/ttf;base64,${fonts.extraBold}) format("truetype")}@page{size:13.333in 7.5in;margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:"CairoEmbedded",sans-serif}.page{width:13.333in;height:7.5in;page-break-after:always;padding:.62in .72in;color:#fff;background:linear-gradient(145deg,#0a2144,#123d75);display:flex;flex-direction:column;position:relative;overflow:hidden}.page.observed{background:linear-gradient(145deg,#092b39,#126784)}.page.proposal{background:linear-gradient(145deg,#23165b,#3f2f92)}.page.unverified{background:linear-gradient(145deg,#4d3510,#8a621c)}.glow{position:absolute;width:5in;height:5in;border-radius:50%;background:rgba(75,151,248,.16);left:-1.8in;bottom:-3in}header{display:flex;justify-content:space-between;align-items:flex-start;position:relative}header h2{font-size:18px;margin:13px 0 0;color:#d5e5ff}.pill{display:inline-block;padding:7px 13px;border:1px solid rgba(255,255,255,.23);background:rgba(255,255,255,.12);border-radius:99px;font-size:12px;font-weight:700}header strong{font-size:58px;line-height:1;opacity:.22}main{position:relative;margin-top:.55in;max-width:10.5in}h1{font-size:39px;line-height:1.45;margin:0 0 .28in;font-weight:800}.body{font-size:17px;line-height:2;max-width:10.2in}footer{position:relative;margin-top:auto;border-top:1px solid rgba(255,255,255,.19);padding-top:.18in;display:flex;justify-content:space-between;font-size:12px;color:#dbe8ff}footer b{letter-spacing:.5px}.page:last-child{page-break-after:auto}</style></head><body>${pages}</body></html>`;
-}
-
-export default async function handler(req, res) {
-  if (guard(req, res)) return;
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  let browser;
-  try {
-    const report = parseBody(req);
-    const fonts = await embeddedFonts();
-    browser = await playwright.launch({
-      args: chromium.args.filter(arg => arg !== '--single-process'),
-      executablePath: await chromium.executablePath(),
-      headless: true
-    });
-    const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-    await page.setContent(reportHTML(report, fonts), { waitUntil: 'load', timeout: 30000 });
-    const fontsReady = await page.evaluate(async () => {
-      await document.fonts.ready;
-      return document.fonts.check('16px CairoEmbedded', 'تقرير تيكنو تيم');
-    });
-    if (!fontsReady) throw new Error('تعذر تحميل الخط العربي داخل ملف PDF');
-    const pdf = await page.pdf({ printBackground: true, width: '13.333in', height: '7.5in', margin: { top: '0', right: '0', bottom: '0', left: '0' } });
-    const slug = (report.client.name || 'Client').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 60) || 'Client';
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="Techno_Team_Report_${slug}.pdf"`);
-    res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).send(Buffer.from(pdf));
-  } catch (error) {
-    return res.status(500).json({ error: String(error?.message || error) });
-  } finally {
-    if (browser) await browser.close().catch(() => {});
-  }
-}
+const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clean=(v,n=3000)=>String(v==null?'':v).replace(/\u0000/g,'').slice(0,n);
+const allowedLayouts=new Set(['cover','summary','cards','priority','positioning','journey','comparison','timeline','metrics','requirements']);
+function parseBody(req){const body=typeof req.body==='string'?JSON.parse(req.body):(req.body||{}),raw=Array.isArray(body.slides)?body.slides.slice(0,14):[];if(raw.length<8)throw Error('التقرير لا يحتوي على سلايدات كافية');return{title:clean(body.title,180),client:{name:clean(body.client?.name,140),specialty:clean(body.client?.specialty,180)},quality:body.quality||{},slides:raw.map((s,i)=>({number:Number(s.number)||i+1,title:clean(s.title,140),headline:clean(s.headline,500),body:clean(s.body,5000),kind:['observed','inference','proposal','unverified'].includes(s.kind)?s.kind:'proposal',layout:allowedLayouts.has(s.layout)?s.layout:'cards',blocks:(Array.isArray(s.blocks)?s.blocks:[]).slice(0,8).map(b=>({type:clean(b.type,40),title:clean(b.title,120),value:clean(b.value,1200),detail:clean(b.detail,1600),done:clean(b.done,400)})),evidenceCount:Array.isArray(s.evidence)?s.evidence.length:0}))}}
+let fontsPromise;function fonts(){return fontsPromise||(fontsPromise=Promise.all([readFile(new URL('../assets/fonts/Cairo-Regular.b64',import.meta.url),'utf8'),readFile(new URL('../assets/fonts/Cairo-Bold.b64',import.meta.url),'utf8'),readFile(new URL('../assets/fonts/Cairo-ExtraBold.b64',import.meta.url),'utf8')]).then(([regular,bold,extraBold])=>({regular:regular.trim(),bold:bold.trim(),extraBold:extraBold.trim()})))}
+function blockHTML(b){return `<div class="block ${esc(b.type)}"><span>${esc(b.title)}</span><b>${esc(b.value)}</b>${b.detail?`<p>${esc(b.detail)}</p>`:''}${b.done?`<small>تعريف الاكتمال: ${esc(b.done)}</small>`:''}</div>`}
+function pageHTML(s,client){const kind={observed:'مرصود',inference:'قراءتنا',proposal:'مقترح Techno Team',unverified:'غير متحقق'};return `<section class="page ${esc(s.kind)} layout-${esc(s.layout)}"><div class="shape one"></div><div class="shape two"></div><header><div><span class="pill">${esc(kind[s.kind]||s.kind)}</span><h2>${esc(s.title)}</h2></div><strong>${String(s.number).padStart(2,'0')}</strong></header><main><h1>${esc(s.headline)}</h1>${s.body?`<div class="body">${esc(s.body).replace(/\n/g,'<br>')}</div>`:''}${s.blocks.length?`<div class="blocks">${s.blocks.map(blockHTML).join('')}</div>`:''}</main><footer><b>Techno Team</b><span>${s.evidenceCount?`${s.evidenceCount} دليل مرتبط`:'توصية أو خطة'}</span><span>${esc(client.name)}</span></footer></section>`}
+function reportHTML(report,f){const pages=report.slides.map(s=>pageHTML(s,report.client)).join('');return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><style>
+@font-face{font-family:CairoEmbedded;font-weight:400;src:url(data:font/ttf;base64,${f.regular}) format('truetype')}@font-face{font-family:CairoEmbedded;font-weight:700;src:url(data:font/ttf;base64,${f.bold}) format('truetype')}@font-face{font-family:CairoEmbedded;font-weight:800 900;src:url(data:font/ttf;base64,${f.extraBold}) format('truetype')}@page{size:13.333in 7.5in;margin:0}*{box-sizing:border-box}html,body{margin:0;background:#fff;font-family:CairoEmbedded,sans-serif}.page{width:13.333in;height:7.5in;page-break-after:always;padding:.52in .66in;color:#10213c;background:#f7f9fc;display:flex;flex-direction:column;position:relative;overflow:hidden}.shape{position:absolute;border-radius:50%;background:#e7f0fb}.shape.one{width:4in;height:4in;left:-2in;bottom:-2.4in}.shape.two{width:1.7in;height:1.7in;right:-.8in;top:-.8in;background:#dbe9fa}.page.proposal{background:#f7f6fc}.page.unverified{background:#fffaf0}.page.layout-cover{background:linear-gradient(145deg,#071d3b,#0d4d8f);color:#fff}.layout-cover .shape{background:rgba(63,144,242,.19)}header{display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:1}header h2{font-size:17px;margin:11px 0 0;color:#44709f}.layout-cover header h2{color:#cfe2ff}.pill{display:inline-block;padding:6px 12px;border:1px solid #cbd9e9;background:#fff;border-radius:99px;font-size:11px;font-weight:700;color:#2764a9}.layout-cover .pill{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.11);color:#fff}header strong{font-size:55px;line-height:1;color:#1e5c9e;opacity:.16}.layout-cover header strong{color:#fff;opacity:.22}main{position:relative;z-index:1;margin-top:.32in;min-height:0}h1{font-size:34px;line-height:1.42;margin:0 0 .22in;font-weight:900;max-width:10.8in}.layout-cover h1{font-size:46px;margin-top:.75in;max-width:8.7in}.body{font-size:16px;line-height:1.9;max-width:10.5in;color:#42536b}.layout-cover .body{font-size:20px;color:#d8e8fb}.blocks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.16in;margin-top:.15in}.layout-summary .blocks{grid-template-columns:repeat(3,1fr)}.layout-priority .blocks{grid-template-columns:1fr 1fr}.layout-journey .blocks,.layout-timeline .blocks{grid-template-columns:repeat(3,1fr)}.layout-metrics .blocks,.layout-requirements .blocks{grid-template-columns:repeat(2,1fr)}.block{background:#fff;border:1px solid #d8e2ee;border-radius:14px;padding:.16in .18in;min-height:.92in;box-shadow:0 7px 20px rgba(20,62,111,.05)}.block span{display:block;font-size:11px;color:#2764a9;font-weight:800;margin-bottom:5px}.block b{display:block;font-size:15px;line-height:1.55;color:#132846}.block p{font-size:11px;line-height:1.65;color:#526178;margin:6px 0 0}.block small{display:block;font-size:9px;color:#68768a;margin-top:5px}.block.action,.block.measure,.block.phase{border-top:4px solid #2d78d1}.block.barrier{border-top:4px solid #c64d4d}.block.opportunity,.block.strength{border-top:4px solid #19936d}.block.comparison{border-right:4px solid #7d65bd}.layout-cover .blocks{display:none}footer{position:relative;z-index:1;margin-top:auto;border-top:1px solid #d8e2ee;padding-top:.12in;display:flex;justify-content:space-between;gap:12px;font-size:10px;color:#667891}.layout-cover footer{border-color:rgba(255,255,255,.2);color:#dce9f8}.page:last-child{page-break-after:auto}
+</style></head><body>${pages}</body></html>`}
+export default async function handler(req,res){if(guard(req,res))return;if(req.method!=='POST')return res.status(405).json({error:'POST only'});let browser;try{const report=parseBody(req),embedded=await fonts();browser=await playwright.launch({args:chromium.args.filter(x=>x!=='--single-process'),executablePath:await chromium.executablePath(),headless:true});const page=await browser.newPage({viewport:{width:1600,height:900}});await page.setContent(reportHTML(report,embedded),{waitUntil:'load',timeout:30000});const ready=await page.evaluate(async()=>{await document.fonts.ready;return document.fonts.check('16px CairoEmbedded','تقرير تيكنو تيم')});if(!ready)throw Error('تعذر تحميل الخط العربي داخل ملف PDF');const overflow=await page.evaluate(()=>[...document.querySelectorAll('.page')].map((p,i)=>{const pageBox=p.getBoundingClientRect(),foot=p.querySelector('footer')?.getBoundingClientRect();return{page:i+1,overflow:!!foot&&foot.bottom>pageBox.bottom+1}}).filter(x=>x.overflow));if(overflow.length)throw Error(`محتوى زائد في الصفحات: ${overflow.map(x=>x.page).join('، ')}`);const pdf=await page.pdf({printBackground:true,width:'13.333in',height:'7.5in',margin:{top:'0',right:'0',bottom:'0',left:'0'}}),unicodeName=`Techno_Team_Report_${(report.client.name||'Client').replace(/[^\p{L}\p{N}_-]+/gu,'_').slice(0,70)||'Client'}.pdf`;res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="Techno_Team_Report.pdf"; filename*=UTF-8''${encodeURIComponent(unicodeName)}`);res.setHeader('Cache-Control','no-store');return res.status(200).send(Buffer.from(pdf))}catch(error){return res.status(500).json({error:String(error?.message||error)})}finally{if(browser)await browser.close().catch(()=>{})}}
