@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import http from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {extname,join,normalize} from 'node:path';
+import {chromium as pw} from 'playwright-core';
+import chromium from '@sparticuz/chromium';
 
 function load(){
   const box={module:{exports:{}},exports:{},console,URL,AbortController,setTimeout,clearTimeout};
@@ -14,6 +19,8 @@ function load(){
   return{T,P:ctx.window.TechnoPipeline,ctx};
 }
 const reply=(data,status=200)=>({ok:status>=200&&status<300,status,json:async()=>data});
+const root=process.cwd(),mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'};
+function server(){return http.createServer(async(req,res)=>{try{let path=new URL(req.url,'http://x').pathname;if(path.endsWith('/'))path+='index.html';const file=normalize(join(root,path));if(!file.startsWith(root))throw Error('bad path');const body=await readFile(file);res.writeHead(200,{'content-type':mime[extname(file)]||'application/octet-stream'});res.end(body)}catch{res.writeHead(404);res.end('not found')}})}
 
 function clientDoc(T,name='عيادة الاختبار'){
   let doc=T.emptyDocument();
@@ -90,4 +97,76 @@ test('Q14 report contains separate content and client ads slides',()=>{
   assert.ok(slides.some(x=>x.key==='client_ads'&&x.kind==='unverified'));
   const sample=slides.find(x=>x.key==='client_content').blocks.find(x=>x.type==='sample');
   assert.match(sample.value,/2 منشور/);
+});
+
+test('Q14 completes a thin sample from direct dated posts on the confirmed account',async()=>{
+  const {T,P,ctx}=load(),made=clientDoc(T,'عيادة الاختبار');
+  made.source.content={text:'الصفحة الرسمية لعيادة الاختبار من غير منشورات مؤرخة ظاهرة.',hash:'thin'};
+  let searches=0,reads=0;
+  ctx.fetch=async(url,opt)=>{
+    const body=JSON.parse(opt.body||'{}');
+    if(url==='/api/search'){
+      searches++;
+      return reply({output:[{type:'web_search_call',action:{sources:[
+        {url:'https://facebook.com/testclinic/posts/101',title:'عيادة الاختبار — منشور'},
+        {url:'https://facebook.com/testclinic/posts/102',title:'عيادة الاختبار — منشور'},
+        {url:'https://facebook.com/testclinic/posts/103',title:'عيادة الاختبار — منشور'},
+        {url:'https://facebook.com/otherclinic/posts/999',title:'عيادة أخرى — منشور'}
+      ]}}]});
+    }
+    if(url==='/api/read'){
+      reads++;
+      const id=body.url.match(/(10[1-3])$/)?.[1]||'999';
+      return reply({status:'read',title:'عيادة الاختبار',text:`November ${Number(id)-100}, 2026\nمنشور طبي مؤرخ ومباشر من حساب العيادة المؤكد يشرح خدمة مهمة للمريض.`});
+    }
+    throw Error('unexpected '+url);
+  };
+  let doc=await P.sampleClientContent(T,made.doc,made.clientId,{});
+  doc=await P.sampleClientContent(T,doc,made.clientId,{});
+  const c=doc.clients[0],content=P.contentContext(T,c);
+  assert.equal(searches,1,'direct search is cached for unchanged confirmed accounts');
+  assert.equal(reads,3,'unrelated direct post is rejected before reading');
+  assert.equal(content.sampleCount,3);
+  assert.equal(c.integratedContentDiscovery.status,'sampled');
+  assert.ok(content.platforms[0].posts.every(x=>x.url.includes('/testclinic/posts/')));
+});
+
+test('Q14 keeps the existing sample when direct post completion fails',async()=>{
+  const {T,P,ctx}=load(),made=clientDoc(T,'عيادة الاختبار');
+  made.source.content={text:'2026-10-02 منشور واحد مؤرخ عن الوقاية وصحة الأسنان قبل الحجز والمتابعة.',hash:'one'};
+  ctx.fetch=async url=>url==='/api/search'?reply({output:[]}):reply({},503);
+  const doc=await P.sampleClientContent(T,made.doc,made.clientId,{}),c=doc.clients[0],content=P.contentContext(T,c);
+  assert.equal(content.sampleCount,1);
+  assert.equal(c.integratedContentDiscovery.status,'unverified');
+  assert.match(content.limits.join(' '),/يمكن إضافة عينة/);
+});
+
+test('Q14 report drawer saves a manual dated sample and marks the report stale',async t=>{
+  process.getuid=()=>1000;
+  const {T}=load(),made=clientDoc(T,'عيادة العينة'),c=made.doc.clients[0];
+  c.contentSamples=[];
+  c.integratedStudy={inputHash:'old-hash'};
+  c.integratedReport={status:'ready',quality:{status:'limited',warnings:['عينة المحتوى ناقصة']},slides:[{id:'slide_client_content',number:1,key:'client_content',layout:'content',title:'تحليل محتوى العميل',headline:'العينة المقروءة لا تكفي',body:'مطلوب عينة مؤرخة',kind:'unverified',blocks:[],evidence:[]}]};
+  made.doc.extensions.integratedUI={activeClientId:c.id,stage:'report',slide:0};
+  const web=server();await new Promise(r=>web.listen(0,'127.0.0.1',r));
+  const port=web.address().port,browser=await pw.launch({executablePath:await chromium.executablePath(),headless:true,args:['--no-sandbox']});
+  t.after(async()=>{await browser.close();await new Promise(r=>web.close(r))});
+  const page=await browser.newPage({viewport:{width:1100,height:800}});
+  await page.addInitScript(({doc})=>localStorage.setItem('tt_integrated_r02_current',JSON.stringify(doc)),{doc:made.doc});
+  await page.goto(`http://127.0.0.1:${port}/r02-integrated-app/`);
+  await page.getByRole('button',{name:'إضافة عينة محتوى'}).click();
+  await page.getByLabel('المنشورات').fill([
+    '2026-10-01\nرابط: https://facebook.com/testclinic/posts/1\nفورمات: فيديو\nمعلومة طبية مفيدة للمريض عن الوقاية والمتابعة.',
+    '2026-10-08\nرابط: https://facebook.com/testclinic/posts/2\nنص حالة يشرح رحلة المريض والخطوات المتاحة.',
+    '2026-10-15\nرابط: https://facebook.com/testclinic/posts/3\nدعوة واضحة للحجز ومعرفة تفاصيل الخدمة.'
+  ].join('\n\n'));
+  await page.getByRole('button',{name:'حفظ العينة وتحديث حالة التقرير'}).click();
+  await page.getByText('تم حفظ 3 منشور؛ حدّث التقرير الآن').waitFor();
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('tt_integrated_r02_current'))),savedClient=saved.clients[0];
+  assert.equal(savedClient.contentSamples[0].posts.length,3);
+  assert.equal(savedClient.integratedStudy.inputHash,'');
+  assert.equal(savedClient.integratedReport.status,'stale');
+  await page.reload();
+  await page.getByText('التقرير محتاج تحديث',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'اذهب لتحديث التقرير'}).waitFor();
 });
