@@ -1,0 +1,12 @@
+(function(){
+  'use strict';
+  const box=document.getElementById('evidenceView'),esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const token=decodeURIComponent(location.hash.replace(/^#/,'')),key=token&&`tt_evidence_view_${token}`;let data=null;
+  try{data=key?JSON.parse(localStorage.getItem(key)||'null'):null}catch{}
+  if(!data||!data.quote){box.innerHTML='<section class="evidence-viewer-card"><span class="evidence-viewer-kicker">Techno Team OS</span><h1>تعذر فتح الدليل</h1><p>ارجع للتقرير واضغط «اعرض الدليل عند المعلومة» مرة تانية.</p></section>';return}
+  const context=String(data.context||data.quote),quote=String(data.quote),at=context.indexOf(quote),before=at>=0?context.slice(0,at):'',after=at>=0?context.slice(at+quote.length):context;
+  box.innerHTML=`<header class="evidence-viewer-head"><a class="brand" href="./"><span class="logo">TT</span><span><b>Techno Team OS</b><small>مراجعة الدليل المقروء</small></span></a><span class="state ok">الدليل محفوظ ✓</span></header><section class="evidence-viewer-card"><span class="evidence-viewer-kicker">الدليل المستخدم في التقرير</span><h1>${esc(data.title||data.platform||'مصدر')}</h1><div class="evidence-viewer-meta"><span>${esc(data.clientName||'العميل')}</span><span>${esc(data.platform||'مصدر ويب')}</span><span>تاريخ القراءة: ${esc(data.observedAt?String(data.observedAt).slice(0,10):'غير مسجل')}</span></div><div class="notice info">دي نسخة النص اللي النظام قرأها وقت الدراسة. الصفحة الأصلية ممكن تتغير بعد تاريخ القراءة.</div><article class="evidence-reader">${at>=0?`${esc(before)}<mark id="evidenceTarget">${esc(quote)}</mark>${esc(after)}`:`<mark id="evidenceTarget">${esc(quote)}</mark><hr>${esc(after)}`}</article><div class="evidence-viewer-actions">${data.url?`<a class="btn secondary" href="${esc(data.url)}" target="_blank" rel="noopener">فتح الصفحة الأصلية ↗</a>`:''}<button class="btn ghost" id="copyQuote">نسخ نص الدليل</button><button class="btn ghost" id="closeView">إغلاق</button></div><div class="evidence-url">${esc(data.url||'رابط المصدر غير مسجل')}</div></section>`;
+  requestAnimationFrame(()=>document.getElementById('evidenceTarget')?.scrollIntoView({block:'center'}));
+  document.getElementById('copyQuote').onclick=async()=>{try{await navigator.clipboard.writeText(quote);document.getElementById('copyQuote').textContent='تم النسخ ✓'}catch{document.getElementById('copyQuote').textContent='حدد النص وانسخه يدويًا'}};
+  document.getElementById('closeView').onclick=()=>window.close();
+})();
