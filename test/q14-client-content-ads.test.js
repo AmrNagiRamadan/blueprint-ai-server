@@ -138,7 +138,22 @@ test('Q14 keeps the existing sample when direct post completion fails',async()=>
   const doc=await P.sampleClientContent(T,made.doc,made.clientId,{}),c=doc.clients[0],content=P.contentContext(T,c);
   assert.equal(content.sampleCount,1);
   assert.equal(c.integratedContentDiscovery.status,'unverified');
-  assert.match(content.limits.join(' '),/يمكن إضافة عينة/);
+  assert.match(content.limits.join(' '),/أضف الباقي/);
+});
+
+test('Q14 accepts cited structured post data when the social reader blocks the direct URL',async()=>{
+  const {T,P,ctx}=load(),made=clientDoc(T,'عيادة الاختبار');
+  made.source.content={text:'الصفحة الرسمية من غير Feed قابل للقراءة.',hash:'blocked-feed'};
+  const posts=[1,2,3].map(i=>({url:`https://facebook.com/testclinic/posts/${i}`,accountName:'عيادة الاختبار',publishedAt:`2026-10-0${i}`,text:`نص منشور طبي موثق رقم ${i} من نتيجة البحث المرتبطة بالرابط المباشر للحساب.`,format:i===1?'video':'image'}));
+  ctx.fetch=async url=>url==='/api/search'
+    ?reply({output:[{type:'web_search_call',action:{sources:posts.map(x=>({url:x.url,title:'عيادة الاختبار'}))}},{type:'message',content:[{type:'output_text',text:JSON.stringify({posts}),annotations:posts.map(x=>({url:x.url,title:'عيادة الاختبار'}))}]}]})
+    :reply({error:'blocked'},503);
+  const mock={output:[{type:'web_search_call',action:{sources:posts.map(x=>({url:x.url,title:'عيادة الاختبار'}))}},{type:'message',content:[{type:'output_text',text:JSON.stringify({posts}),annotations:posts.map(x=>({url:x.url,title:'عيادة الاختبار'}))}]}]};
+  assert.equal(P.structuredPostCandidates(mock,'عيادة الاختبار').length,3);
+  const doc=await P.sampleClientContent(T,made.doc,made.clientId,{}),c=doc.clients[0],content=P.contentContext(T,c);
+  assert.equal(content.sampleCount,3);
+  assert.equal(c.integratedContentDiscovery.accepted,3);
+  assert.ok(c.contentSamples[0].posts.every(x=>x.origin==='auto_search_cited'));
 });
 
 test('Q14 report drawer saves a manual dated sample and marks the report stale',async t=>{
@@ -154,7 +169,8 @@ test('Q14 report drawer saves a manual dated sample and marks the report stale',
   const page=await browser.newPage({viewport:{width:1100,height:800}});
   await page.addInitScript(({doc})=>localStorage.setItem('tt_integrated_r02_current',JSON.stringify(doc)),{doc:made.doc});
   await page.goto(`http://127.0.0.1:${port}/r02-integrated-app/`);
-  await page.getByRole('button',{name:'إضافة عينة محتوى'}).click();
+  await page.getByText('التحديث اكتمل، لكن المنصة حجبت المنشورات',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'إضافة عينة الآن'}).click();
   await page.getByLabel('المنشورات').fill([
     '2026-10-01\nرابط: https://facebook.com/testclinic/posts/1\nفورمات: فيديو\nمعلومة طبية مفيدة للمريض عن الوقاية والمتابعة.',
     '2026-10-08\nرابط: https://facebook.com/testclinic/posts/2\nنص حالة يشرح رحلة المريض والخطوات المتاحة.',
