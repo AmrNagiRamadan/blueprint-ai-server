@@ -94,3 +94,11 @@ test('Q15 manual library paste accepts a matching advertiser, preserves evidence
   assert.equal(updated.integratedReport.status,'stale');
   assert.equal(updated.integratedStudy.inputHash,'');
 });
+
+test('Q15 stores the optional target market separately from the branch address',()=>{
+  const {T}=load();let doc=T.emptyDocument();const made=T.createClientDraft(doc,{name:'عيادة سوق',specialty:'أسنان',links:'https://market.example.com',market:'المهندسين والدقي'});doc=made.document;
+  assert.equal(doc.clients[0].inputs.market,'المهندسين والدقي');
+  assert.ok(T.knownInputs(doc.clients[0]).some(x=>x.key==='market'&&x.value==='المهندسين والدقي'));
+  const updated=T.createClientDraft(doc,{id:made.clientId,name:'عيادة سوق',specialty:'أسنان',links:'https://market.example.com',market:'الجيزة'}).document;
+  assert.equal(updated.clients[0].inputs.market,'الجيزة');
+});

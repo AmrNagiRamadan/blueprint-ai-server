@@ -38,6 +38,7 @@
       <label class="field wide"><span>رسالة أو معلومات العميل</span><textarea name="notes" rows="3">${inputValue(c,'notes')}</textarea></label>
       <label class="field"><span>الهدف لو معروف</span><input name="goal" value="${inputValue(c,'goal')}"></label>
       <label class="field"><span>الميزانية لو معروفة</span><input name="budget" value="${inputValue(c,'budget')}"></label>
+      <label class="field wide"><span>السوق / المنطقة المستهدفة لو معروفة</span><input name="market" value="${inputValue(c,'market')}" placeholder="مثال: المهندسين والدقي — مش عنوان الفرع"></label>
       <div class="field wide actions"><button class="btn primary" type="submit">${c?'حفظ والذهاب للحسابات':'إنشاء العميل والذهاب للحسابات'}</button>${c?'<button class="btn secondary" type="button" id="accountsBtn">فتح الحسابات</button>':''}</div>
     </form></div>${c?knownInputs(c):''}`}
   function knownInputs(c){const items=T.knownInputs(c);return `<div class="card"><div class="page-head"><div><small>مسجل مرة واحدة</small><h1 style="font-size:18px">المعلومات اللي مش هنرجع نسألها</h1></div></div><div class="known">${items.map(x=>`<div><small>${esc(x.label)}</small><b>${esc(x.value)}</b></div>`).join('')}</div></div>`}
@@ -66,7 +67,7 @@
   function emptyState(){return `<div class="card report-empty"><div class="big">+</div><h2>أضف أول عميل</h2><p>ابدأ بالاسم ورابط واحد على الأقل.</p><div class="actions" style="justify-content:center"><button class="btn primary" data-nav="client">إضافة عميل</button></div></div>`}
   function bind(){
     $$('[data-nav]').forEach(b=>b.onclick=()=>go(b.dataset.nav));
-    const form=$('#clientForm');if(form)form.onsubmit=async e=>{e.preventDefault();if(busy)return;const fd=new FormData(form),current=documentState.extensions?.integratedUI?.draftNew?null:client(),input={id:current?.id||'',name:fd.get('name'),specialty:fd.get('specialty'),links:fd.get('links'),notes:fd.get('notes'),goal:fd.get('goal'),budget:fd.get('budget')};await commit(doc=>{const out=T.createClientDraft(doc,input);return setUI(out.document,{activeClientId:out.clientId,stage:'accounts',draftNew:false})},current?'تم تحديث العميل':'تم إنشاء العميل')};
+    const form=$('#clientForm');if(form)form.onsubmit=async e=>{e.preventDefault();if(busy)return;const fd=new FormData(form),current=documentState.extensions?.integratedUI?.draftNew?null:client(),input={id:current?.id||'',name:fd.get('name'),specialty:fd.get('specialty'),links:fd.get('links'),notes:fd.get('notes'),goal:fd.get('goal'),budget:fd.get('budget'),market:fd.get('market')};await commit(doc=>{const out=T.createClientDraft(doc,input);return setUI(out.document,{activeClientId:out.clientId,stage:'accounts',draftNew:false})},current?'تم تحديث العميل':'تم إنشاء العميل')};
     const ac=$('#accountsBtn');if(ac)ac.onclick=()=>go('accounts');const fresh=$('#freshClient');if(fresh)fresh.onclick=()=>commit(doc=>setUI(doc,{activeClientId:'',stage:'client',draftNew:true}),'');
     $$('[data-source-decision]').forEach(b=>b.onclick=()=>queueSourceDecision(b));
     const discover=$('#discoverBtn');if(discover)discover.onclick=runDiscovery;const run=$('#runStudyBtn');if(run)run.onclick=runFullStudy;
