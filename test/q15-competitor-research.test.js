@@ -28,8 +28,8 @@ test('Q15 keeps website, dated content and library-backed ads separate for each 
       throw Error('unexpected search '+body.input);
     }
     if(url==='/api/read'){
-      if(body.url==='https://alpha.example.org')return reply({status:'read',text:'خدمات زراعة وتقويم الأسنان. احجز عبر واتساب. تقييمات المرضى.\n2026-10-01 فيديو حالة زراعة قبل وبعد مع شرح الخطة.\nhttps://facebook.com/alpha/posts/1\n2026-10-12 صورة عن التقويم ودعوة للحجز.'});
-      if(body.url==='https://beta.example.net')return reply({status:'read',text:'خدمات أسنان عامة وتنظيف. تواصل معنا للحجز. '.repeat(8)});
+      if(body.url==='https://alpha.example.org')return reply({status:'read',text:'خدمات زراعة وتقويم الأسنان في المهندسين. احجز عبر واتساب. تقييمات المرضى.\n2026-10-01 فيديو حالة زراعة قبل وبعد مع شرح الخطة.\nhttps://facebook.com/alpha/posts/1\n2026-10-12 صورة عن التقويم ودعوة للحجز.'});
+      if(body.url==='https://beta.example.net')return reply({status:'read',text:'خدمات أسنان عامة وتنظيف في المهندسين. تواصل معنا للحجز. '.repeat(8)});
       if(body.url.includes('ads/library'))return reply({status:'read',text:'Alpha Dental Clinic\nSponsored\nLibrary ID: 111\nStarted running on 01/10/2026\nابتسامتك تبدأ بخطة زراعة واضحة\nSend Message\nhttps://www.facebook.com/ads/library/?id=111'});
     }
     throw Error('unexpected '+url);
@@ -54,7 +54,7 @@ test('Q15 keeps website, dated content and library-backed ads separate for each 
 
 test('Q15 reports unreadable ad libraries as unverified instead of claiming no ads',async()=>{
   const {T,P,ctx}=load(),made=madeClient(T);
-  ctx.fetch=async(url,opt)=>{const body=JSON.parse(opt.body||'{}');if(url==='/api/search')return reply(body.input.includes('منافسين مباشرين')?search([{url:'https://gamma.example.org',title:'Gamma Dental Clinic'}]):search([]));if(url==='/api/read')return reply({status:'read',text:'عيادة أسنان تقدم خدمات علاجية وحجز مواعيد وتفاصيل واضحة. '.repeat(5)});throw Error('unexpected')};
+  ctx.fetch=async(url,opt)=>{const body=JSON.parse(opt.body||'{}');if(url==='/api/search')return reply(body.input.includes('منافسين مباشرين')?search([{url:'https://gamma.example.org',title:'Gamma Dental Clinic'}]):search([]));if(url==='/api/read')return reply({status:'read',text:'عيادة أسنان في المهندسين تقدم خدمات علاجية وحجز مواعيد وتفاصيل واضحة. '.repeat(5)});throw Error('unexpected')};
   const doc=await P.competitors(T,made.doc,made.clientId,{}),c=doc.clients[0],comp=c.integratedCompetitors.competitors[0];
   assert.equal(comp.ads.status,'unverified');
   assert.match(comp.limits.join(' '),/غير متحققة/);
@@ -72,12 +72,12 @@ test('Q15 website audit does not claim mobile, traffic or bounce metrics from te
 });
 
 test('Q15 keeps different social accounts separate and excludes only the exact client account',async()=>{
-  const {T,P,ctx}=load();let doc=T.emptyDocument();const made=T.createClientDraft(doc,{name:'عيادة العميل',specialty:'أسنان',links:'https://facebook.com/clientclinic'});doc=made.document;doc.clients[0].sources[0].identity.status='confirmed';
+  const {T,P,ctx}=load();let doc=T.emptyDocument();const made=T.createClientDraft(doc,{name:'عيادة العميل',specialty:'أسنان',links:'https://facebook.com/clientclinic'});doc=made.document;doc.clients[0].sources[0].identity.status='confirmed';doc.clients[0].inputs.answers={geo:'المهندسين'};
   ctx.fetch=async(url,opt)=>{const body=JSON.parse(opt.body||'{}');if(url==='/api/search')return reply(body.input.includes('منافسين مباشرين')?search([
     {url:'https://facebook.com/clientclinic',title:'عيادة العميل'},
     {url:'https://facebook.com/alphaClinic',title:'Alpha Dental'},
     {url:'https://facebook.com/betaClinic',title:'Beta Dental'}
-  ]):search([]));if(url==='/api/read')return reply({status:'read',text:'عيادة أسنان وحجز وخدمات علاجية ومعلومات كافية للقراءة. '.repeat(5)});throw Error('unexpected')};
+  ]):search([]));if(url==='/api/read')return reply({status:'read',text:'عيادة أسنان في المهندسين وحجز وخدمات علاجية ومعلومات كافية للقراءة. '.repeat(5)});throw Error('unexpected')};
   const out=await P.competitors(T,doc,made.clientId,{}),names=out.clients[0].integratedCompetitors.competitors.map(x=>x.name);
   assert.equal(names.length,2);
   assert.ok(names.some(x=>/Alpha/.test(x))&&names.some(x=>/Beta/.test(x)));
