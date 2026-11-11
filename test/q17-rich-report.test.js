@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {parseBody} from '../api/report.js';
+
+function load(){const box={module:{exports:{}},exports:{},console,URL,AbortController,setTimeout,clearTimeout};vm.createContext(box);vm.runInContext(fs.readFileSync('t04-review/data-model.js','utf8'),box);const ctx={window:{},console,URL,AbortController,setTimeout,clearTimeout,fetch:null};ctx.window.window=ctx.window;vm.createContext(ctx);vm.runInContext(fs.readFileSync('r02-integrated-app/pipeline.js','utf8'),ctx);return{T:box.module.exports,P:ctx.window.TechnoPipeline}}
+function slides(count=9,blocks=2){return Array.from({length:count},(_,i)=>({id:`s${i+1}`,number:i+1,title:`سلايد ${i+1}`,headline:`عنوان ${i+1}`,body:'محتوى واضح',kind:i===0?'observed':'proposal',layout:i===0?'cover':i===1?'metrics':'cards',evidence:[{id:'e'}],blocks:i===1?Array.from({length:blocks},(_,j)=>({type:'metric',title:`مؤشر ${j+1}`,value:`قيمة ${j+1}`,detail:`التفصيل ${j+1}`,url:`https://example.com/source#${j+1}`})):[]}))}
+
+test('Q17 adds a dedicated client website slide with direct source links and honest limits',()=>{const {P}=load(),client={sources:[{id:'site',url:'https://clinic.example/about',platform:'موقع / مصدر خارجي',identity:{status:'confirmed'},read:{status:'read',title:'العيادة',observedAt:'2026-11-11'},content:{text:'نقدم خدمات زراعة وتقويم الأسنان. احجز موعدك عبر واتساب. خبرة منذ 2010. New Collection Woman Dress — Visit our new store in Bay Shore.'}}]},slide=P.clientWebsiteSlide(client);assert.equal(slide.key,'client_site');assert.ok(slide.blocks.some(x=>x.title==='وضوح الخدمات'&&x.url==='https://clinic.example/about'));assert.ok(slide.blocks.some(x=>x.title==='مسار الحجز والتواصل'));assert.ok(slide.blocks.some(x=>x.title==='بواقي قالب جاهز'));assert.ok(slide.blocks.some(x=>x.title==='الأداء وتجربة الموبايل'&&x.type==='verification'));assert.ok(slide.evidence.every(x=>x.url==='https://clinic.example/about'))});
+
+test('Q17 does not silently drop logical slides or blocks and splits long sections',()=>{const parsed=parseBody({body:{title:'تقرير',client:{name:'عميل'},slides:slides(21,14)}});assert.equal(parsed.logicalSlideCount,21);assert.ok(parsed.slides.length>21);assert.ok(parsed.slides.some(x=>x.continuation));const metrics=parsed.slides.filter(x=>x.logicalNumber===2);assert.equal(metrics.flatMap(x=>x.blocks).length,14);assert.equal(metrics.flatMap(x=>x.blocks).at(-1).title,'مؤشر 14');assert.ok(metrics.flatMap(x=>x.blocks).every(x=>x.url.startsWith('https://example.com/')))});
+
+test('Q17 rejects oversized reports explicitly instead of truncating them',()=>{assert.throws(()=>parseBody({body:{slides:slides(37,1)}}),/37 سلايد/);const tooMany=slides(9,1);tooMany[2].blocks=Array.from({length:31},(_,i)=>({title:String(i)}));assert.throws(()=>parseBody({body:{slides:tooMany}}),/31 عنصرًا/)});
